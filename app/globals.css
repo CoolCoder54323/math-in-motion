@@ -7,9 +7,9 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans);
+  --font-sans: var(--font-lexend);
   --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-sans);
+  --font-heading: var(--font-fraunces);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -48,73 +48,100 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/*
+ * "Sunlit Classroom" — a warm sunflower palette.
+ * Cream paper, walnut ink, rich petal gold, burnt terracotta accents.
+ * Every color lives in the warm half of the wheel (60°–90° hue) so nothing
+ * ever reads cold on the page.
+ */
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
+  --background: oklch(0.96 0.028 85);        /* warm ivory paper */
+  --foreground: oklch(0.26 0.07 55);         /* deep walnut ink */
+
+  --card: oklch(0.98 0.022 85);
+  --card-foreground: oklch(0.26 0.07 55);
+
+  --popover: oklch(0.98 0.022 85);
+  --popover-foreground: oklch(0.26 0.07 55);
+
+  --primary: oklch(0.78 0.17 80);            /* sunflower petal */
+  --primary-foreground: oklch(0.22 0.07 55); /* roasted espresso */
+
+  --secondary: oklch(0.92 0.08 85);          /* pale honey */
+  --secondary-foreground: oklch(0.3 0.08 55);
+
+  --muted: oklch(0.92 0.035 82);             /* soft oat */
+  --muted-foreground: oklch(0.48 0.08 55);   /* faded umber */
+
+  --accent: oklch(0.62 0.18 45);             /* burnt terracotta */
+  --accent-foreground: oklch(0.97 0.025 85);
+
+  --destructive: oklch(0.55 0.22 30);
+
+  --border: oklch(0.78 0.08 70);             /* dusty gold */
+  --input: oklch(0.85 0.055 78);
+  --ring: oklch(0.72 0.18 75);
+
+  --chart-1: oklch(0.78 0.17 80);
+  --chart-2: oklch(0.62 0.18 45);
+  --chart-3: oklch(0.68 0.14 60);
+  --chart-4: oklch(0.85 0.13 95);
+  --chart-5: oklch(0.55 0.17 30);
+
   --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+
+  --sidebar: oklch(0.96 0.028 85);
+  --sidebar-foreground: oklch(0.26 0.07 55);
+  --sidebar-primary: oklch(0.78 0.17 80);
+  --sidebar-primary-foreground: oklch(0.22 0.07 55);
+  --sidebar-accent: oklch(0.92 0.08 85);
+  --sidebar-accent-foreground: oklch(0.3 0.08 55);
+  --sidebar-border: oklch(0.78 0.08 70);
+  --sidebar-ring: oklch(0.72 0.18 75);
+
+  /* Custom sunflower tokens used throughout the studio. */
+  --sunflower: oklch(0.85 0.18 88);
+  --sunflower-deep: oklch(0.7 0.18 75);
+  --terracotta: oklch(0.62 0.18 45);
+  --umber: oklch(0.26 0.07 55);
+  --paper: oklch(0.96 0.028 85);
+  --paper-warm: oklch(0.93 0.04 82);
+  --rule: oklch(0.78 0.08 70);
+  --margin-red: oklch(0.6 0.2 28);
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --background: oklch(0.2 0.04 60);
+  --foreground: oklch(0.95 0.03 85);
+  --card: oklch(0.25 0.05 60);
+  --card-foreground: oklch(0.95 0.03 85);
+  --popover: oklch(0.25 0.05 60);
+  --popover-foreground: oklch(0.95 0.03 85);
+  --primary: oklch(0.82 0.17 85);
+  --primary-foreground: oklch(0.2 0.06 55);
+  --secondary: oklch(0.32 0.05 60);
+  --secondary-foreground: oklch(0.95 0.03 85);
+  --muted: oklch(0.3 0.04 60);
+  --muted-foreground: oklch(0.72 0.05 80);
+  --accent: oklch(0.72 0.18 50);
+  --accent-foreground: oklch(0.2 0.06 55);
+  --destructive: oklch(0.6 0.22 28);
+  --border: oklch(1 0 0 / 14%);
+  --input: oklch(1 0 0 / 18%);
+  --ring: oklch(0.82 0.17 85);
+  --chart-1: oklch(0.82 0.17 85);
+  --chart-2: oklch(0.72 0.18 50);
+  --chart-3: oklch(0.68 0.14 60);
+  --chart-4: oklch(0.85 0.13 95);
+  --chart-5: oklch(0.65 0.17 30);
+  --sidebar: oklch(0.2 0.04 60);
+  --sidebar-foreground: oklch(0.95 0.03 85);
+  --sidebar-primary: oklch(0.82 0.17 85);
+  --sidebar-primary-foreground: oklch(0.2 0.06 55);
+  --sidebar-accent: oklch(0.32 0.05 60);
+  --sidebar-accent-foreground: oklch(0.95 0.03 85);
+  --sidebar-border: oklch(1 0 0 / 14%);
+  --sidebar-ring: oklch(0.82 0.17 85);
 }
 
 @layer base {
@@ -127,4 +154,369 @@
   html {
     @apply font-sans;
   }
+  ::selection {
+    background: oklch(0.85 0.18 88 / 0.6);
+    color: var(--umber);
+  }
+}
+
+/*
+ * Studio utilities
+ *
+ * bg-studio-gradient — late-afternoon light through a west-facing window.
+ *   Layered warm radial gradients on a paper-cream base, plus a very subtle
+ *   repeating micro-texture for paper grain.
+ *
+ * bg-sunbeams — diagonal shafts of sunlight, slowly drifting.
+ *
+ * .ruled-paper — composition-notebook look for the textarea: horizontal
+ *   rules every line plus a red margin line.
+ *
+ * .text-link — big editorial call-to-action, underline animates in on hover.
+ *
+ * .crawl-border — an SVG dashed border whose dasharray crawls on hover.
+ */
+@layer utilities {
+  .bg-studio-gradient {
+    background-color: var(--paper);
+    background-image:
+      radial-gradient(
+        ellipse 70% 50% at 12% 0%,
+        oklch(0.9 0.16 85 / 0.65),
+        transparent 60%
+      ),
+      radial-gradient(
+        ellipse 65% 45% at 88% 100%,
+        oklch(0.75 0.19 45 / 0.35),
+        transparent 60%
+      ),
+      radial-gradient(
+        ellipse 55% 40% at 50% 50%,
+        oklch(0.94 0.1 75 / 0.35),
+        transparent 70%
+      ),
+      radial-gradient(
+        ellipse 40% 30% at 95% 10%,
+        oklch(0.82 0.17 55 / 0.25),
+        transparent 70%
+      );
+  }
+
+  .bg-paper-grain {
+    /* Fine dotted noise, barely visible, adds "paper" texture. */
+    background-image: radial-gradient(
+      oklch(0.5 0.1 55 / 0.06) 1px,
+      transparent 1px
+    );
+    background-size: 3px 3px;
+  }
+
+  .bg-sunbeams {
+    /* Very soft, wide diagonal shafts. Long transition zones on both sides
+       of each beam prevent visible banding. */
+    background-image: repeating-linear-gradient(
+      118deg,
+      oklch(0.97 0.08 85 / 0) 0px,
+      oklch(0.97 0.08 85 / 0) 180px,
+      oklch(0.97 0.1 85 / 0.05) 280px,
+      oklch(0.97 0.08 85 / 0) 380px
+    );
+    background-size: 400% 400%;
+    animation: sunbeam-drift 28s ease-in-out infinite;
+    mask-image: radial-gradient(ellipse 90% 80% at 50% 50%, black 40%, transparent 100%);
+    -webkit-mask-image: radial-gradient(ellipse 90% 80% at 50% 50%, black 40%, transparent 100%);
+  }
+
+  .ruled-paper {
+    background-color: var(--card);
+    background-image:
+      /* red margin line 3rem from the left */
+      linear-gradient(
+        to right,
+        transparent 2.75rem,
+        oklch(0.6 0.2 28 / 0.55) 2.75rem,
+        oklch(0.6 0.2 28 / 0.55) calc(2.75rem + 1px),
+        transparent calc(2.75rem + 1px)
+      ),
+      /* horizontal rules every 1.75rem */
+      linear-gradient(
+        to bottom,
+        transparent,
+        transparent calc(1.75rem - 1px),
+        oklch(0.78 0.08 70 / 0.5) calc(1.75rem - 1px),
+        oklch(0.78 0.08 70 / 0.5) 1.75rem
+      );
+    background-size:
+      100% 100%,
+      100% 1.75rem;
+    background-position:
+      0 0,
+      0 0.35rem;
+  }
+
+  .text-link {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--foreground);
+    font-family: var(--font-fraunces);
+    font-weight: 600;
+    transition:
+      color 0.25s ease,
+      transform 0.25s ease;
+    cursor: pointer;
+  }
+  .text-link::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -0.25rem;
+    height: 3px;
+    background: var(--sunflower-deep);
+    transform-origin: left center;
+    transform: scaleX(var(--link-scale, 1));
+    transition: transform 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+    border-radius: 2px;
+  }
+  .text-link:not(.text-link-static):not(:disabled)::after {
+    transform: scaleX(0);
+  }
+  .text-link:not(:disabled):hover::after,
+  .text-link:not(:disabled):focus-visible::after {
+    transform: scaleX(1);
+  }
+  .text-link:not(:disabled):hover {
+    color: var(--sunflower-deep);
+  }
+  .text-link:not(:disabled):hover .text-link-arrow {
+    transform: translateX(6px);
+  }
+  .text-link-arrow {
+    display: inline-block;
+    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .text-link:disabled {
+    cursor: not-allowed;
+    opacity: 0.4;
+  }
+
+  /* Inline prose example link used by ConceptInput. */
+  .prose-link {
+    position: relative;
+    color: var(--foreground);
+    font-weight: 600;
+    background-image: linear-gradient(
+      to bottom,
+      transparent 65%,
+      oklch(0.85 0.18 88 / 0.55) 65%,
+      oklch(0.85 0.18 88 / 0.55) 95%,
+      transparent 95%
+    );
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    transition:
+      color 0.2s ease,
+      background-size 0.3s ease;
+    cursor: pointer;
+  }
+  .prose-link:hover,
+  .prose-link:focus-visible {
+    color: var(--accent);
+    background-image: linear-gradient(
+      to bottom,
+      transparent 55%,
+      oklch(0.85 0.18 88 / 0.9) 55%,
+      oklch(0.85 0.18 88 / 0.9) 98%,
+      transparent 98%
+    );
+  }
+  .prose-link.is-active {
+    color: var(--accent);
+    background-image: linear-gradient(
+      to bottom,
+      transparent 55%,
+      oklch(0.85 0.18 88 / 0.9) 55%,
+      oklch(0.85 0.18 88 / 0.9) 98%,
+      transparent 98%
+    );
+  }
+}
+
+/*
+ * Keyframes
+ */
+
+/* The headline sparkle does a little hop with gentle rotation. */
+@keyframes sparkle-float {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-6deg) scale(1);
+  }
+  25% {
+    transform: translateY(-8px) rotate(4deg) scale(1.08);
+  }
+  50% {
+    transform: translateY(-4px) rotate(10deg) scale(1.12);
+  }
+  75% {
+    transform: translateY(-10px) rotate(-2deg) scale(1.05);
+  }
+}
+.sparkle-float {
+  display: inline-block;
+  animation: sparkle-float 3.6s ease-in-out infinite;
+  transform-origin: center;
+}
+
+/* Drift variants for the floating math glyphs. */
+@keyframes drift-a {
+  0%,
+  100% {
+    transform: translate(0, 0) rotate(-8deg);
+  }
+  50% {
+    transform: translate(14px, -22px) rotate(8deg);
+  }
+}
+@keyframes drift-b {
+  0%,
+  100% {
+    transform: translate(0, 0) rotate(6deg);
+  }
+  50% {
+    transform: translate(-18px, -14px) rotate(-10deg);
+  }
+}
+@keyframes drift-c {
+  0%,
+  100% {
+    transform: translate(0, 0) rotate(-4deg) scale(1);
+  }
+  50% {
+    transform: translate(10px, 18px) rotate(12deg) scale(1.08);
+  }
+}
+.math-glyph {
+  position: absolute;
+  user-select: none;
+  font-family: var(--font-fraunces);
+  font-weight: 600;
+  will-change: transform;
+}
+.math-glyph.drift-a {
+  animation: drift-a 11s ease-in-out infinite;
+}
+.math-glyph.drift-b {
+  animation: drift-b 13s ease-in-out infinite;
+}
+.math-glyph.drift-c {
+  animation: drift-c 9s ease-in-out infinite;
+}
+
+/* Sunbeam diagonal drift. */
+@keyframes sunbeam-drift {
+  0%,
+  100% {
+    background-position: 0% 0%;
+  }
+  50% {
+    background-position: 30% 30%;
+  }
+}
+
+/* Staggered page-load reveal. */
+@keyframes rise-in {
+  0% {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.rise-in {
+  animation: rise-in 0.75s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+}
+
+/* Bouncing shapes inside the preview. */
+@keyframes bounce-soft {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-14px);
+  }
+}
+.bounce-soft {
+  animation: bounce-soft 2.2s cubic-bezier(0.37, 0, 0.63, 1) infinite;
+}
+
+/* Slow spin for the orbit of glyphs around the preview icon. */
+@keyframes slow-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.slow-spin {
+  animation: slow-spin 22s linear infinite;
+}
+
+/* Soft pulse for the status dot. */
+@keyframes soft-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.55;
+    transform: scale(1.4);
+  }
+}
+.soft-pulse {
+  animation: soft-pulse 2.2s ease-in-out infinite;
+}
+
+/*
+ * Crawling-ants dashed border for the drop zone.
+ * Uses an inline SVG via background-image with an animated stroke-dashoffset
+ * on a CSS custom property so we get true vector dashes that "march" on hover.
+ */
+@keyframes march {
+  to {
+    stroke-dashoffset: -40;
+  }
+}
+.ants-border path,
+.ants-border rect {
+  stroke-dasharray: 14 8;
+  animation: march 1.6s linear infinite;
+  animation-play-state: paused;
+}
+.ants-border.is-active path,
+.ants-border.is-active rect,
+.ants-border-group:hover .ants-border path,
+.ants-border-group:hover .ants-border rect,
+.ants-border-group:focus-visible .ants-border path,
+.ants-border-group:focus-visible .ants-border rect {
+  animation-play-state: running;
+}
+
+/* Gentle sway for the sunflower doodle in the drop zone. */
+@keyframes sway {
+  0%,
+  100% {
+    transform: rotate(-5deg);
+  }
+  50% {
+    transform: rotate(5deg);
+  }
+}
+.sway {
+  transform-origin: 50% 90%;
+  animation: sway 4s ease-in-out infinite;
 }
