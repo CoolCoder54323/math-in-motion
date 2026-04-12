@@ -12,6 +12,7 @@ import {
 import { toast } from "sonner";
 
 import { useAppStore } from "@/lib/store";
+import { useHydrated } from "@/hooks/useHydrated";
 
 /**
  * UploadZone — the "Chapter 01" column of the editorial workspace.
@@ -40,6 +41,7 @@ export function UploadZone() {
   const setLoading = useAppStore((s) => s.setLoading);
   const extractedText = useAppStore((s) => s.extractedText);
   const extractedLatex = useAppStore((s) => s.extractedLatex);
+  const hydrated = useHydrated();
 
   const isAnalyzing = loading === "ocr";
 
@@ -115,11 +117,14 @@ export function UploadZone() {
   const onAnalyze = async () => {
     if (!file || isAnalyzing) return;
     setLoading("ocr");
-    const toastId = toast.loading("Reading your worksheet…");
+    const toastId = toast.loading("Looking at your worksheet…");
     try {
       const body = new FormData();
       body.append("file", file);
-      const res = await fetch("/api/ocr", { method: "POST", body });
+      const res = await fetch("/api/analyze-image", {
+        method: "POST",
+        body,
+      });
       const data: {
         success: boolean;
         latex?: string;
@@ -128,15 +133,18 @@ export function UploadZone() {
       } = await res.json();
 
       if (!res.ok || !data.success) {
-        throw new Error(data.error || `OCR failed (${res.status}).`);
+        throw new Error(
+          data.error || `Image analysis failed (${res.status}).`,
+        );
       }
 
       setExtracted(data.latex ?? null, data.text ?? null);
-      toast.success("Problem extracted! Describe the concept below.", {
+      toast.success("We understood it — describe the lesson below.", {
         id: toastId,
       });
     } catch (err) {
-      const message = err instanceof Error ? err.message : "OCR failed.";
+      const message =
+        err instanceof Error ? err.message : "Image analysis failed.";
       toast.error(message, { id: toastId });
     } finally {
       setLoading(null);
@@ -215,7 +223,7 @@ export function UploadZone() {
         <input
           ref={inputRef}
           type="file"
-          accept="image/png,image/jpeg,image/jpg,application/pdf"
+          accept="image/png,image/jpeg,image/jpg"
           className="sr-only"
           onChange={onInputChange}
         />
@@ -272,7 +280,7 @@ export function UploadZone() {
                   : "drag a worksheet in here"}
               </p>
               <p className="text-sm text-[color:var(--umber)]/65">
-                PNG, JPG, and PDF — or paste a screenshot with{" "}
+                PNG, JPG — or paste a screenshot with{" "}
                 <kbd className="inline-block rounded border border-[color:var(--rule)] bg-[color:var(--paper)] px-1.5 py-0.5 font-mono text-[11px] font-semibold text-[color:var(--umber)]">
                   ⌘V
                 </kbd>
@@ -287,7 +295,7 @@ export function UploadZone() {
       <button
         type="button"
         onClick={onAnalyze}
-        disabled={!file || isAnalyzing}
+        disabled={hydrated ? !file || isAnalyzing : true}
         className="text-link mt-2 self-start text-2xl md:text-3xl"
       >
         {isAnalyzing ? (

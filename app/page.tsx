@@ -1,6 +1,5 @@
 import { AnimationPreview } from "@/components/AnimationPreview";
-import { ConceptInput } from "@/components/ConceptInput";
-import { UploadZone } from "@/components/UploadZone";
+import { PromptComposer } from "@/components/PromptComposer";
 
 /**
  * Home — Math Animation Studio
@@ -408,45 +407,13 @@ export default function Home() {
 
         <SectionRule label="Create" />
 
-        {/* ── Two-column workspace ─────────────────────────────────────── */}
+        {/* ── Unified prompt composer ──────────────────────────────────── */}
         <section
           aria-label="Create an animation"
-          className="relative grid gap-16 py-10 md:grid-cols-[6fr_auto_5fr] md:gap-10"
+          className="rise-in py-10"
+          style={{ animationDelay: "120ms" }}
         >
-          <div className="rise-in" style={{ animationDelay: "120ms" }}>
-            <UploadZone />
-          </div>
-
-          {/* Wavy hand-drawn vertical divider between the two columns. */}
-          <div
-            aria-hidden="true"
-            className="relative hidden items-stretch justify-center md:flex"
-          >
-            <svg
-              viewBox="0 0 20 600"
-              preserveAspectRatio="none"
-              className="h-full w-5 text-[color:var(--rule)]"
-            >
-              <path
-                d="M10 0 Q 2 30, 10 60 T 10 120 T 10 180 T 10 240 T 10 300 T 10 360 T 10 420 T 10 480 T 10 540 T 10 600"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-              />
-            </svg>
-            {/* Little sunflower sitting on the divider. */}
-            <span
-              className="sway absolute top-1/2 -translate-y-1/2 text-3xl"
-              aria-hidden="true"
-            >
-              🌻
-            </span>
-          </div>
-
-          <div className="rise-in" style={{ animationDelay: "240ms" }}>
-            <ConceptInput />
-          </div>
+          <PromptComposer />
         </section>
 
         <SectionRule label="Preview" />

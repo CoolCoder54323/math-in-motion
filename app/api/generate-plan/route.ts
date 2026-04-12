@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
 
 /**
@@ -12,6 +13,9 @@ import OpenAI from "openai";
  *     estimatedDuration: number,   // seconds
  *     steps: [{ description, visualHint, narration }, ...]
  *   }
+ *
+ * Provider selection: set ANIMATION_PROVIDER=anthropic in .env.local to use Claude.
+ * Defaults to OpenAI. Falls back to whichever key is available.
  */
 
 const SYSTEM_PROMPT = `You are a K-8 math educator and animation director. You
@@ -43,14 +47,53 @@ Rules:
 
 type Body = { conceptText?: string; latexProblem?: string };
 
+async function planWithOpenAI(
+  apiKey: string,
+  userPrompt: string,
+): Promise<string | null> {
+  const client = new OpenAI({ apiKey });
+  const completion = await client.chat.completions.create({
+    model: "gpt-4o",
+    temperature: 0.4,
+    response_format: { type: "json_object" },
+    messages: [
+      { role: "system", content: SYSTEM_PROMPT },
+      { role: "user", content: userPrompt },
+    ],
+  });
+  return completion.choices[0]?.message?.content ?? null;
+}
+
+async function planWithAnthropic(
+  apiKey: string,
+  userPrompt: string,
+): Promise<string | null> {
+  const client = new Anthropic({ apiKey });
+  const message = await client.messages.create({
+    model: "claude-sonnet-4-6",
+    max_tokens: 4096,
+    temperature: 0.4,
+    system: SYSTEM_PROMPT,
+    messages: [{ role: "user", content: userPrompt }],
+  });
+  const textBlock = message.content.find((b) => b.type === "text");
+  return textBlock?.text ?? null;
+}
+
 export async function POST(request: Request) {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) {
+  const anthropicKey = process.env.ANTHROPIC_API_KEY;
+  const openaiKey = process.env.OPENAI_API_KEY;
+  const provider = (process.env.ANIMATION_PROVIDER ?? "openai").toLowerCase();
+
+  const useAnthropic = provider === "anthropic" && !!anthropicKey;
+  const useOpenAI = !useAnthropic && !!openaiKey;
+
+  if (!useAnthropic && !useOpenAI) {
     return NextResponse.json(
       {
         success: false,
         error:
-          "OpenAI credentials are not configured. Set OPENAI_API_KEY in .env.local.",
+          "No AI credentials configured. Set OPENAI_API_KEY or ANTHROPIC_API_KEY in .env.local.",
       },
       { status: 500 },
     );
@@ -89,19 +132,10 @@ export async function POST(request: Request) {
     .join("\n\n");
 
   try {
-    const client = new OpenAI({ apiKey });
+    const raw = useAnthropic
+      ? await planWithAnthropic(anthropicKey!, userPrompt)
+      : await planWithOpenAI(openaiKey!, userPrompt);
 
-    const completion = await client.chat.completions.create({
-      model: "gpt-4o",
-      temperature: 0.7,
-      response_format: { type: "json_object" },
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: userPrompt },
-      ],
-    });
-
-    const raw = completion.choices[0]?.message?.content;
     if (!raw) {
       return NextResponse.json(
         { success: false, error: "Model returned an empty response." },
@@ -109,9 +143,14 @@ export async function POST(request: Request) {
       );
     }
 
+    const cleaned = raw
+      .replace(/^```(?:json)?\s*/i, "")
+      .replace(/\s*```\s*$/, "")
+      .trim();
+
     let parsed: unknown;
     try {
-      parsed = JSON.parse(raw);
+      parsed = JSON.parse(cleaned);
     } catch {
       return NextResponse.json(
         { success: false, error: "Model returned invalid JSON." },
@@ -132,8 +171,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true, plan: parsed });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
+    const label = useAnthropic ? "Anthropic" : "OpenAI";
     return NextResponse.json(
-      { success: false, error: `OpenAI request failed: ${message}` },
+      { success: false, error: `${label} request failed: ${message}` },
       { status: 502 },
     );
   }

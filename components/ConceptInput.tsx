@@ -5,6 +5,7 @@ import { toast } from "sonner";
 
 import { Textarea } from "@/components/ui/textarea";
 import { useAppStore, type AnimationPlan } from "@/lib/store";
+import { useHydrated } from "@/hooks/useHydrated";
 
 /**
  * ConceptInput — the "Chapter 02" column of the editorial workspace.
@@ -73,6 +74,7 @@ export function ConceptInput() {
   const setAnimationPlan = useAppStore((s) => s.setAnimationPlan);
   const loading = useAppStore((s) => s.loading);
   const setLoading = useAppStore((s) => s.setLoading);
+  const hydrated = useHydrated();
 
   const isGenerating = loading === "plan";
 
@@ -88,7 +90,7 @@ export function ConceptInput() {
     setLoading("plan");
     const toastId = toast.loading("Composing your animation plan…");
     try {
-      const res = await fetch("/api/generate-plan", {
+      const res = await fetch("/api/generate-animation", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -98,15 +100,24 @@ export function ConceptInput() {
       });
       const data: {
         success: boolean;
+        title?: string;
+        estimatedDuration?: number;
+        steps?: { label: string; narration: string }[];
+        manimCode?: string;
         plan?: AnimationPlan;
         error?: string;
       } = await res.json();
 
-      if (!res.ok || !data.success || !data.plan) {
+      if (!res.ok || !data.success) {
         throw new Error(data.error || `Generation failed (${res.status}).`);
       }
 
-      setAnimationPlan(data.plan);
+      setAnimationPlan({
+        title: data.title ?? data.plan?.title ?? "Untitled Lesson",
+        estimatedDuration: data.estimatedDuration ?? data.plan?.estimatedDuration ?? 30,
+        steps: data.steps ?? data.plan?.steps ?? [],
+        manimCode: data.manimCode ?? data.plan?.manimCode ?? "",
+      });
       toast.success("Your animation plan has bloomed.", { id: toastId });
 
       if (typeof window !== "undefined") {
@@ -215,7 +226,7 @@ export function ConceptInput() {
       <button
         type="button"
         onClick={onGenerate}
-        disabled={(!hasContent && !extractedLatex && !extractedText) || isGenerating}
+        disabled={hydrated ? (!hasContent && !extractedLatex && !extractedText) || isGenerating : true}
         className="text-link mt-2 self-start text-2xl md:text-3xl"
       >
         {isGenerating ? (
