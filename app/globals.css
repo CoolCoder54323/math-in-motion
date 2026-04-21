@@ -1,6 +1,7 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
+@import "katex/dist/katex.min.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -519,4 +520,255 @@
 .sway {
   transform-origin: 50% 90%;
   animation: sway 4s ease-in-out infinite;
+}
+
+/* ── Step-by-step pipeline card animations ────────────────────── */
+
+/* Card entrance: slides up from below with spring-like overshoot. */
+@keyframes step-card-enter {
+  0% {
+    opacity: 0;
+    transform: translateY(40px) scale(0.97);
+    filter: blur(4px);
+  }
+  60% {
+    opacity: 1;
+    transform: translateY(-4px) scale(1.005);
+    filter: blur(0);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0);
+  }
+}
+.step-card-enter {
+  animation: step-card-enter 0.7s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+}
+
+/* Connector line drawing between step cards. */
+@keyframes connector-draw {
+  0% {
+    height: 0;
+    opacity: 0;
+  }
+  30% {
+    opacity: 1;
+  }
+  100% {
+    height: 100%;
+    opacity: 1;
+  }
+}
+.connector-draw {
+  animation: connector-draw 0.5s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+}
+
+/* Pulsing ring around the active step's icon. */
+@keyframes progress-ring-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 oklch(0.78 0.17 80 / 0.5);
+  }
+  50% {
+    box-shadow: 0 0 0 8px oklch(0.78 0.17 80 / 0);
+  }
+}
+.progress-ring-pulse {
+  animation: progress-ring-pulse 2s ease-in-out infinite;
+}
+
+/* Slide-down expand for step detail content. */
+@keyframes expand-content {
+  0% {
+    opacity: 0;
+    max-height: 0;
+    transform: translateY(-8px);
+  }
+  100% {
+    opacity: 1;
+    max-height: 600px;
+    transform: translateY(0);
+  }
+}
+.expand-content {
+  animation: expand-content 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  overflow: hidden;
+}
+
+/* Redo button reveal on hover. */
+@keyframes redo-reveal {
+  0% {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+.redo-reveal {
+  animation: redo-reveal 0.3s ease-out forwards;
+}
+
+/* Floating control bar entrance from bottom. */
+@keyframes controls-float-up {
+  0% {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.controls-float-up {
+  animation: controls-float-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+  animation-delay: 200ms;
+}
+
+/* Success shimmer across a completed step card. */
+@keyframes success-shimmer {
+  0% {
+    background-position: -200% center;
+  }
+  100% {
+    background-position: 200% center;
+  }
+}
+.success-shimmer {
+  background-image: linear-gradient(
+    110deg,
+    transparent 25%,
+    oklch(0.85 0.18 88 / 0.15) 37%,
+    transparent 63%
+  );
+  background-size: 200% 100%;
+  animation: success-shimmer 1.5s ease-out 1;
+}
+
+/* Warm paper-textured progress bar — ink-on-notebook-line aesthetic */
+
+@keyframes ink-bleed {
+  0% {
+    background-position: -100% center;
+  }
+  100% {
+    background-position: 200% center;
+  }
+}
+
+@keyframes marker-wobble {
+  0%, 100% {
+    transform: translate(-50%, -38%) rotate(-8deg) scale(1);
+  }
+  25% {
+    transform: translate(-50%, -42%) rotate(-12deg) scale(1.08);
+  }
+  50% {
+    transform: translate(-50%, -38%) rotate(-6deg) scale(1);
+  }
+  75% {
+    transform: translate(-50%, -42%) rotate(-10deg) scale(1.05);
+  }
+}
+
+.progress-bar-track {
+  position: relative;
+  border-bottom: 1.5px solid oklch(0.72 0.04 70 / 0.5);
+  box-shadow:
+    inset 0 1px 0 oklch(0.88 0.06 85 / 0.4),
+    0 1px 0 oklch(1 0 0 0 / 0.3);
+}
+
+.progress-bar-fill {
+  position: relative;
+  background: linear-gradient(
+    90deg,
+    oklch(0.62 0.14 60) 0%,
+    oklch(0.72 0.17 75) 40%,
+    oklch(0.78 0.17 80) 70%,
+    oklch(0.82 0.16 85) 100%
+  );
+  background-size: 300% 100%;
+  animation: ink-bleed 3s ease-in-out infinite;
+  border-radius: 999px;
+}
+
+.progress-bar-fill::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    oklch(1 0 0 / 0.18) 0%,
+    transparent 40%,
+    oklch(0.3 0.05 55 / 0.1) 100%
+  );
+  border-radius: inherit;
+}
+
+.progress-bar-marker {
+  position: absolute;
+  right: -2px;
+  top: 50%;
+  font-size: 16px;
+  line-height: 1;
+  color: oklch(0.45 0.1 50);
+  filter: drop-shadow(0 1px 1px oklch(1 0 0 / 0.6));
+  animation: marker-wobble 0.8s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* Workshop redesign utilities */
+.bg-studio {
+  background-color: var(--paper);
+  background-image:
+    radial-gradient(ellipse 70% 50% at 12% 0%, oklch(0.9 0.16 85 / 0.65), transparent 60%),
+    radial-gradient(ellipse 65% 45% at 88% 100%, oklch(0.75 0.19 45 / 0.28), transparent 60%),
+    radial-gradient(ellipse 55% 40% at 50% 50%, oklch(0.94 0.1 75 / 0.28), transparent 70%);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: oklch(0.85 0.18 88 / 0.35);
+  color: oklch(0.26 0.07 55 / 0.75);
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-family: var(--font-fraunces);
+  font-size: 11px;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  box-shadow: inset 0 0 0 1px oklch(0.7 0.18 75 / 0.4);
+}
+
+.inner-scroll {
+  overflow-y: auto;
+  flex: 1;
+}
+.inner-scroll::-webkit-scrollbar { width: 4px; }
+.inner-scroll::-webkit-scrollbar-thumb { background: oklch(0.78 0.08 70 / 0.5); border-radius: 2px; }
+
+.scene-card {
+  transition: background 0.3s, box-shadow 0.3s;
+}
+
+/* KaTeX inline/display math sizing & color overrides. */
+.math-inline .katex {
+  font-size: 1.05em;
+}
+.math-display {
+  display: block;
+  text-align: center;
+  margin: 0.25em 0;
+}
+.math-display .katex-display {
+  margin: 0;
+}
+.katex .mord,
+.katex .mbin,
+.katex .mrel,
+.katex .mop {
+  color: var(--umber);
 }

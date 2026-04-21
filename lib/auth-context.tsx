@@ -30,34 +30,60 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
+const STORAGE_KEY = "math-in-motion-user"
+
+function storeUser(user: User | null) {
+  if (user) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(user))
+  } else {
+    localStorage.removeItem(STORAGE_KEY)
+  }
+}
+
+function loadUser(): User | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    return raw ? (JSON.parse(raw) as User) : null
+  } catch {
+    return null
+  }
+}
+
+const MOCK_USER: User = {
+  id: "mock-user-1",
+  email: "user@example.com",
+  name: "Mock User",
+  tier: "free",
+  promptsUsed: 0,
+  promptsLimit: TIER_LIMITS.free,
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
+  const [hydrated, setHydrated] = useState(false)
+
+  useEffect(() => {
+    const stored = loadUser()
+    if (stored) setUser(stored)
+    setHydrated(true)
+  }, [])
 
   const login = () => {
-    setUser({
-      id: "mock-user-1",
-      email: "user@example.com",
-      name: "Mock User",
-      tier: "free",
-      promptsUsed: 0,
-      promptsLimit: TIER_LIMITS.free,
-    })
+    setUser(MOCK_USER)
+    storeUser(MOCK_USER)
   }
 
   const logout = () => {
     setUser(null)
+    storeUser(null)
   }
 
   const signup = () => {
-    setUser({
-      id: "mock-user-1",
-      email: "user@example.com",
-      name: "Mock User",
-      tier: "free",
-      promptsUsed: 0,
-      promptsLimit: TIER_LIMITS.free,
-    })
+    setUser(MOCK_USER)
+    storeUser(MOCK_USER)
   }
+
+  if (!hydrated) return null
 
   return (
     <AuthContext.Provider value={{ user, login, logout, signup }}>
@@ -77,19 +103,14 @@ export function useAuth() {
 export function ProtectedRoute({ children }: { children: ReactNode }) {
   const { user } = useAuth()
   const router = useRouter()
-  const [isChecking, setIsChecking] = useState(true)
 
   useEffect(() => {
-    if (!user) {
+    if (user === null) {
       router.push("/login")
-    } else {
-      setIsChecking(false)
     }
   }, [user, router])
 
-  if (isChecking && !user) {
-    return null
-  }
+  if (!user) return null
 
   return <>{children}</>
 }

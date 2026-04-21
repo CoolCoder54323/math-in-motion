@@ -32,6 +32,8 @@ export function LessonWorkshop() {
   const planApprovalPending = useAppStore((s) => s.planApprovalPending);
   const sceneStates = useAppStore((s) => s.sceneStates);
   const approvePlan = useAppStore((s) => s.approvePlan);
+  const approvalLoading = useAppStore((s) => s.approvalLoading);
+  const approvalError = useAppStore((s) => s.approvalError);
   const updatePlanDraft = useAppStore((s) => s.updatePlanDraft);
   const updateSceneDraft = useAppStore((s) => s.updateSceneDraft);
   const updateStepDraft = useAppStore((s) => s.updateStepDraft);
@@ -45,6 +47,8 @@ export function LessonWorkshop() {
         plan={livePlan}
         sceneStates={sceneStates}
         planApprovalPending={planApprovalPending}
+        approvalLoading={approvalLoading}
+        approvalError={approvalError}
         onApprove={approvePlan}
         onEditTitle={(title) => updatePlanDraft({ ...livePlan, title })}
       />
@@ -84,12 +88,16 @@ function WorkshopHeader({
   plan,
   sceneStates,
   planApprovalPending,
+  approvalLoading,
+  approvalError,
   onApprove,
   onEditTitle,
 }: {
   plan: PlanOutput;
   sceneStates: Record<string, SceneState>;
   planApprovalPending: boolean;
+  approvalLoading: boolean;
+  approvalError: string | null;
   onApprove: () => Promise<void>;
   onEditTitle: (title: string) => void;
 }) {
@@ -179,16 +187,28 @@ function WorkshopHeader({
       )}
 
       {planApprovalPending && (
-        <button
-          type="button"
-          onClick={() => void onApprove()}
-          className="text-link mt-1 self-start text-2xl md:text-3xl"
-        >
-          Approve &amp; start building
-          <span aria-hidden="true" className="text-link-arrow">
-            {" \u2192"}
-          </span>
-        </button>
+        <div className="flex flex-col gap-1.5">
+          <button
+            type="button"
+            onClick={() => void onApprove()}
+            disabled={approvalLoading}
+            className="text-link mt-1 self-start text-2xl disabled:opacity-50 disabled:cursor-wait md:text-3xl"
+          >
+            {approvalLoading
+              ? "Starting\u2026"
+              : "Approve \u0026 start building"}
+            {!approvalLoading && (
+              <span aria-hidden="true" className="text-link-arrow">
+                {" \u2192"}
+              </span>
+            )}
+          </button>
+          {approvalError && (
+            <p className="font-heading text-sm text-red-600">
+              {approvalError}
+            </p>
+          )}
+        </div>
       )}
     </header>
   );
@@ -282,7 +302,7 @@ function SceneCard({
   const ringColor = isFailed
     ? "ring-[color:var(--accent)]/50"
     : isReady
-    ? "ring-[color:var(--sunflower-deep)]/45"
+    ? "ring-[oklch(0.62_0.194_149)]/45"
     : isWorking
     ? "ring-[color:var(--sunflower-deep)]/70"
     : "ring-[color:var(--rule)]/50";
@@ -452,8 +472,8 @@ const STATUS_META: Record<
   ready: {
     label: "ready",
     classes:
-      "bg-[color:var(--sunflower-deep)]/25 text-[color:var(--umber)] ring-1 ring-[color:var(--sunflower-deep)]/50",
-    dotClass: "bg-[color:var(--sunflower-deep)]",
+      "bg-[oklch(0.62_0.194_149)]/25 text-[color:var(--umber)] ring-1 ring-[oklch(0.62_0.194_149)]/50",
+    dotClass: "bg-[oklch(0.62_0.194_149)]",
   },
   failed: {
     label: "failed",

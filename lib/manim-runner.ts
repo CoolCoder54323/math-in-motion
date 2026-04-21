@@ -44,7 +44,7 @@ export async function renderManimScene(
   options?: { quality?: "l" | "m" | "h"; jobId?: string },
 ): Promise<RenderResult> {
   const jobId = options?.jobId ?? randomUUID();
-  const quality = options?.quality ?? "l";
+  const quality = options?.quality ?? "m";
   const tmpDir = createJobDir();
   const sceneFile = join(tmpDir, "scene.py");
 

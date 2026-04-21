@@ -36,9 +36,9 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${lexend.variable} ${fraunces.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${lexend.variable} ${fraunces.variable} ${geistMono.variable} antialiased`}
     >
-      <body className="bg-studio-gradient flex min-h-full flex-col">
+      <body className="bg-studio-gradient flex min-h-screen flex-col">
         <Providers>{children}</Providers>
         <Toaster
           position="bottom-right"

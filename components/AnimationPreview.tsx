@@ -13,6 +13,7 @@ import {
   type AnimationStep,
   type RenderStatus,
 } from "@/lib/store";
+import { useTimedProgress } from "@/hooks/useTimedProgress";
 
 export function AnimationPreview() {
   const plan = useAppStore((s) => s.animationPlan);
@@ -170,6 +171,7 @@ function FloatingControls() {
   const abortGeneration = useAppStore((s) => s.abortGeneration);
   const isPaused = useAppStore((s) => s.isPaused);
   const pipelineJobId = useAppStore((s) => s.pipelineJobId);
+  const planApprovalPending = useAppStore((s) => s.planApprovalPending);
   const setPaused = useAppStore((s) => s.setPaused);
 
   const onPause = async () => {
@@ -202,10 +204,12 @@ function FloatingControls() {
 
   if (!abortGeneration) return null;
 
+  const showPauseToggle = !planApprovalPending;
+
   return (
     <div className="controls-float-up sticky bottom-6 z-10 flex justify-center">
       <div className="flex items-center gap-2 rounded-2xl bg-[color:var(--paper)] px-2 py-2 shadow-[0_16px_50px_-16px_oklch(0.3_0.1_55/0.35)] ring-1 ring-[color:var(--rule)]/40 backdrop-blur-sm">
-        {isPaused ? (
+        {showPauseToggle && isPaused ? (
           <button
             type="button"
             onClick={onResume}
@@ -216,7 +220,7 @@ function FloatingControls() {
             </svg>
             Resume
           </button>
-        ) : (
+        ) : showPauseToggle ? (
           <button
             type="button"
             onClick={onPause}
@@ -228,9 +232,11 @@ function FloatingControls() {
             </svg>
             Pause
           </button>
-        )}
+        ) : null}
 
-        <div className="mx-1 h-6 w-px bg-[color:var(--rule)]/30" />
+        {showPauseToggle && (
+          <div className="mx-1 h-6 w-px bg-[color:var(--rule)]/30" />
+        )}
 
         <button
           type="button"
@@ -374,7 +380,7 @@ function Stage({ plan }: { plan: AnimationPlan }) {
       const res = await fetch("/api/render-animation", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ manimCode: plan.manimCode, quality: "l" }),
+        body: JSON.stringify({ manimCode: plan.manimCode, quality: "m" }),
       });
       const data = await res.json();
       if (!res.ok || !data.success) {
@@ -545,12 +551,15 @@ function StepRow({ index, step }: { index: number; step: AnimationStep }) {
 }
 
 function EmptyStage({ isLoading }: { isLoading: boolean }) {
-  const streamProgress = useAppStore((s) => s.streamProgress);
   const streamingSteps = useAppStore((s) => s.streamingSteps);
   const streamingTitle = useAppStore((s) => s.streamingTitle);
   const abortGeneration = useAppStore((s) => s.abortGeneration);
 
-  if (isLoading && streamProgress > 0) {
+  const planProgress = useTimedProgress(isLoading, 37_000);
+  const pipelineProgress = useTimedProgress(useAppStore((s) => s.loading === "pipeline"), 300_000);
+  const activeProgress = useAppStore((s) => s.loading === "pipeline") ? pipelineProgress : planProgress;
+
+  if (isLoading && activeProgress > 0) {
     return (
       <div className="relative flex min-h-[360px] flex-col gap-6 px-8 py-12 md:px-12">
         <div className="flex flex-col items-center gap-4 text-center">
@@ -563,14 +572,14 @@ function EmptyStage({ isLoading }: { isLoading: boolean }) {
         </div>
 
         <div className="mx-auto w-full max-w-md">
-          <div className="h-2.5 w-full overflow-hidden rounded-full bg-[color:var(--rule)]/30">
+          <div className="h-2 w-full overflow-hidden rounded-full bg-[color:var(--rule)]/30">
             <div
               className="h-full rounded-full bg-[color:var(--sunflower-deep)] transition-[width] duration-300 ease-out"
-              style={{ width: `${streamProgress}%` }}
+              style={{ width: `${activeProgress}%` }}
             />
           </div>
-          <p className="mt-2 text-center font-heading text-sm tabular-nums italic text-[color:var(--umber)]/55">
-            {streamProgress}%
+          <p className="mt-2 text-center font-heading text-sm italic text-[color:var(--umber)]/55">
+            {Math.round(activeProgress)}%
           </p>
         </div>
 

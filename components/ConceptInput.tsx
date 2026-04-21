@@ -98,26 +98,55 @@ export function ConceptInput() {
           latexProblem: extractedLatex || extractedText || undefined,
         }),
       });
-      const data: {
-        success: boolean;
-        title?: string;
-        estimatedDuration?: number;
-        steps?: { label: string; narration: string }[];
-        manimCode?: string;
-        plan?: AnimationPlan;
-        error?: string;
-      } = await res.json();
 
-      if (!res.ok || !data.success) {
+      const contentType = res.headers.get("content-type") ?? "";
+      if (!contentType.includes("text/event-stream")) {
+        const data = await res.json().catch(() => ({ error: `Request failed (${res.status})` }));
         throw new Error(data.error || `Generation failed (${res.status}).`);
       }
 
-      setAnimationPlan({
-        title: data.title ?? data.plan?.title ?? "Untitled Lesson",
-        estimatedDuration: data.estimatedDuration ?? data.plan?.estimatedDuration ?? 30,
-        steps: data.steps ?? data.plan?.steps ?? [],
-        manimCode: data.manimCode ?? data.plan?.manimCode ?? "",
-      });
+      const reader = res.body!.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let result: AnimationPlan | null = null;
+      let streamError: string | null = null;
+
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+
+        let boundary: number;
+        while ((boundary = buffer.indexOf("\n\n")) !== -1) {
+          const raw = buffer.slice(0, boundary);
+          buffer = buffer.slice(boundary + 2);
+
+          const line = raw.trim();
+          if (!line.startsWith("data: ")) continue;
+
+          const event = JSON.parse(line.slice(6));
+
+          switch (event.type) {
+            case "result":
+              result = {
+                title: event.title ?? "Untitled Lesson",
+                estimatedDuration: event.estimatedDuration ?? 30,
+                steps: event.steps ?? [],
+                manimCode: event.manimCode ?? "",
+              };
+              break;
+            case "error":
+              streamError = event.error ?? "Unknown stream error";
+              break;
+          }
+        }
+      }
+
+      if (streamError) throw new Error(streamError);
+      if (!result) throw new Error("Stream ended without a result.");
+
+      setAnimationPlan(result);
       toast.success("Your animation plan has bloomed.", { id: toastId });
 
       if (typeof window !== "undefined") {

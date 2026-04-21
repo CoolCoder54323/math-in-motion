@@ -34,7 +34,7 @@ export async function POST(request: Request) {
   }
 
   const result: RenderResult = await renderManimScene(body.manimCode, {
-    quality: body.quality ?? "l",
+    quality: body.quality ?? "m",
   });
 
   if (!result.ok) {
