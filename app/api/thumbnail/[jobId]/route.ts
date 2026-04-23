@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { readFile } from "node:fs/promises";
-import { existsSync } from "node:fs";
+import { createReadStream, existsSync } from "node:fs";
 import { join } from "node:path";
+import { Readable } from "node:stream";
 
 import { getJobDir } from "@/lib/pipeline/job-manager";
 
@@ -29,8 +29,8 @@ export async function GET(
   }
 
   try {
-    const buffer = await readFile(thumbnailPath);
-    return new Response(buffer, {
+    const stream = createReadStream(thumbnailPath);
+    return new Response(Readable.toWeb(stream) as ReadableStream, {
       headers: {
         "Content-Type": "image/jpeg",
         "Cache-Control": "public, max-age=86400",

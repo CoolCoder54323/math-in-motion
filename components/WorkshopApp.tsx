@@ -8,6 +8,7 @@ import { MathText } from "@/components/MathText";
 import { useAppStore } from "@/lib/store";
 import type { SceneStates } from "@/lib/store";
 import type { PlanOutput, PipelineStage } from "@/lib/pipeline/types";
+import { getStageCompleteStatus } from "@/lib/pipeline/event-reducer";
 
 /* ------------------------------------------------------------------ */
 /*  Phase types                                                         */
@@ -212,7 +213,7 @@ function ApprovalScreen() {
                 store.updatePipelineStage(event.stage as PipelineStage, { status: "running", progress: 0, message: "" });
                 break;
               case "stage-complete":
-                store.updatePipelineStage(event.stage as PipelineStage, { status: "success" as const, progress: 100 });
+                store.updatePipelineStage(event.stage as PipelineStage, { status: getStageCompleteStatus(event), progress: 100 });
                 break;
               case "scene-generating":
                 store.setSceneState(event.sceneId as string, { status: "generating" });
@@ -981,7 +982,7 @@ export function WorkshopApp() {
         store.updatePipelineStage(event.stage as PipelineStage, { status: "running", progress: 0, message: "" });
         break;
       case "stage-complete":
-        store.updatePipelineStage(event.stage as PipelineStage, { status: "success" as const, progress: 100 });
+        store.updatePipelineStage(event.stage as PipelineStage, { status: getStageCompleteStatus(event), progress: 100 });
         break;
       case "plan-ready": {
         const plan = event.plan as Record<string, unknown>;

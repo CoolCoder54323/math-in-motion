@@ -512,7 +512,8 @@ async function confirmationGate(
   renderOutput: RenderOutput,
   onEvent: (event: PipelineEvent) => void,
 ): Promise<void> {
-  const totalScenes = controller.currentPlan!.sceneBreakdown.length;
+  const currentPlan = requireCurrentPlan(controller);
+  const totalScenes = currentPlan.sceneBreakdown.length;
   const failedCount = renderOutput.failures.length;
 
   // Auto-continue ON + zero failures = proceed immediately
@@ -526,7 +527,7 @@ async function confirmationGate(
     type: "pipeline-awaiting-confirmation",
     failedCount,
     totalScenes,
-    canContinue: failedCount / totalScenes <= 0.20,
+    canContinue: failedCount === 0,
   });
 
   const confirmationPromise = new Promise<void>((resolve) => {
@@ -539,6 +540,13 @@ async function confirmationGate(
   await confirmationPromise;
   controller.confirmationPromise = null;
   ctx.manifest.status = "running";
+}
+
+function requireCurrentPlan(controller: PipelineController): PlanOutput {
+  if (!controller.currentPlan) {
+    throw new Error("Pipeline is missing currentPlan.");
+  }
+  return controller.currentPlan;
 }
 
 /* ------------------------------------------------------------------ */
@@ -1082,7 +1090,7 @@ async function executeLessonPipeline(
         : "";
 
       const SCENE_CONCURRENCY = 7;
-      const scenes = controller.currentPlan!.sceneBreakdown;
+      const scenes = requireCurrentPlan(controller).sceneBreakdown;
 
       for (let batchStart = 0; batchStart < scenes.length; batchStart += SCENE_CONCURRENCY) {
         if (signal?.aborted) break;
@@ -1091,7 +1099,7 @@ async function executeLessonPipeline(
         const batchPromises = batch.map((scene) =>
           processScene({
             scene,
-            plan: controller.currentPlan!,
+            plan: requireCurrentPlan(controller),
             quality,
             ctx,
             controller,
@@ -1110,7 +1118,7 @@ async function executeLessonPipeline(
         }
 
         await drainRegenerateQueue({
-          plan: () => controller.currentPlan!,
+          plan: () => requireCurrentPlan(controller),
           quality,
           ctx,
           controller,
@@ -1121,7 +1129,7 @@ async function executeLessonPipeline(
       }
 
       await drainRegenerateQueue({
-        plan: () => controller.currentPlan!,
+        plan: () => requireCurrentPlan(controller),
         quality,
         ctx,
         controller,
@@ -1140,7 +1148,7 @@ async function executeLessonPipeline(
       onEvent({ type: "codegen-ready", scenes: allGenerated });
       onEvent({
         type: "validation-report",
-        scenes: controller.currentPlan!.sceneBreakdown.length,
+        scenes: requireCurrentPlan(controller).sceneBreakdown.length,
         passed: allGenerated.length,
         issues: allIssues,
       });
@@ -1155,7 +1163,7 @@ async function executeLessonPipeline(
       manifest.stages.push(codegenResult);
       onEvent({ type: "stage-complete", stage: "codegen", result: codegenResult });
 
-      const clips = controller.currentPlan!.sceneBreakdown
+      const clips = requireCurrentPlan(controller).sceneBreakdown
         .map((s) => slots.get(s.sceneId)?.clip)
         .filter(
           (c): c is { sceneId: string; videoPath: string; durationSeconds: number } =>
@@ -1166,7 +1174,7 @@ async function executeLessonPipeline(
         throw new StageError("render", "All scenes failed to render.");
       }
 
-      const failures = controller.currentPlan!.sceneBreakdown
+      const failures = requireCurrentPlan(controller).sceneBreakdown
         .filter((s) => !slots.get(s.sceneId)?.clip)
         .map((s) => ({ sceneId: s.sceneId, error: "Scene failed to produce a clip." }));
 

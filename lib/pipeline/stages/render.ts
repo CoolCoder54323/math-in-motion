@@ -12,6 +12,7 @@ import type { PipelineStageHandler } from "../stage";
 import type { PipelineEvent, GeneratedScene, RenderOutput } from "../types";
 import { getManimKitPython } from "../manim-kit";
 import { addTrackedPid, removeTrackedPid } from "../job-manager";
+import { parseSceneId } from "../scene-id";
 
 /* ------------------------------------------------------------------ */
 /*  Stage 4: Manim Scene Rendering                                      */
@@ -47,7 +48,8 @@ export async function renderScene(
   signal?: AbortSignal,
   assets?: string[],
 ): Promise<SceneRenderResult> {
-  const sceneDir = join(jobDir, "scenes", scene.sceneId);
+  const sceneId = parseSceneId(scene.sceneId);
+  const sceneDir = join(jobDir, "scenes", sceneId);
   mkdirSync(sceneDir, { recursive: true });
 
   const sceneFile = join(sceneDir, "scene.py");
@@ -95,9 +97,9 @@ export async function renderScene(
         if (error) {
           const stderrHint = stderr?.trim() ? `\n\nSTDERR:\n${stderr.trim()}` : "";
           const errMsg = error.killed || signal?.aborted
-            ? `Scene "${scene.sceneId}" ${signal?.aborted ? "aborted" : "timed out"}.`
-            : `Scene "${scene.sceneId}" render failed: ${error.message}${stderrHint}`;
-          resolve({ ok: false, sceneId: scene.sceneId, error: errMsg });
+            ? `Scene "${sceneId}" ${signal?.aborted ? "aborted" : "timed out"}.`
+            : `Scene "${sceneId}" render failed: ${error.message}${stderrHint}`;
+          resolve({ ok: false, sceneId, error: errMsg });
           return;
         }
 
@@ -121,14 +123,14 @@ export async function renderScene(
         if (!videoPath) {
           resolve({
             ok: false,
-            sceneId: scene.sceneId,
-            error: `No video file found after rendering scene "${scene.sceneId}".`,
+            sceneId,
+            error: `No video file found after rendering scene "${sceneId}".`,
           });
           return;
         }
 
         // Copy to stable clip path
-        const clipPath = join(jobDir, "clips", `${scene.sceneId}.mp4`);
+        const clipPath = join(jobDir, "clips", `${sceneId}.mp4`);
         copyFileSync(videoPath, clipPath);
 
         // Clean up scene render directory
@@ -140,7 +142,7 @@ export async function renderScene(
 
         resolve({
           ok: true,
-          sceneId: scene.sceneId,
+          sceneId,
           videoPath: clipPath,
           durationSeconds: 0, // Will be filled by ffprobe in postprocess
         });
@@ -148,7 +150,7 @@ export async function renderScene(
     );
 
     if (proc.pid) {
-      addTrackedPid(proc.pid, jobDir.split("/").pop() ?? "unknown", scene.sceneId);
+      addTrackedPid(proc.pid, jobDir.split("/").pop() ?? "unknown", sceneId);
     }
 
     // Kill manim process when pipeline signal aborts — prevents orphan processes.
@@ -172,8 +174,8 @@ export async function renderScene(
       if (signal) signal.removeEventListener("abort", onAbort);
       resolve({
         ok: false,
-        sceneId: scene.sceneId,
-        error: `Failed to start manim for "${scene.sceneId}": ${err.message}`,
+        sceneId,
+        error: `Failed to start manim for "${sceneId}": ${err.message}`,
       });
     });
   });

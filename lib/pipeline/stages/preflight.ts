@@ -3,6 +3,7 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync,
 import { join } from "node:path";
 import { extractThumbnail } from "../ffmpeg-runner";
 import { getManimKitPython } from "../manim-kit";
+import { parseSceneId } from "../scene-id";
 import type {
   GeneratedScene,
   PreflightBeatSnapshot,
@@ -235,7 +236,8 @@ function computeMetrics(
 }
 
 function runManimPreflight(scene: GeneratedScene, jobDir: string, assets?: string[]) {
-  const sceneDir = join(jobDir, "preflight", scene.sceneId);
+  const sceneId = parseSceneId(scene.sceneId);
+  const sceneDir = join(jobDir, "preflight", sceneId);
   const mediaDir = join(sceneDir, "media");
   mkdirSync(sceneDir, { recursive: true });
   writeFileSync(join(sceneDir, "scene.py"), scene.pythonCode, "utf-8");
@@ -280,12 +282,12 @@ function runManimPreflight(scene: GeneratedScene, jobDir: string, assets?: strin
       },
       (error, _stdout, stderr) => {
         if (error) {
-          reject(new Error(`Preflight render failed for "${scene.sceneId}": ${error.message}\n${stderr}`));
+          reject(new Error(`Preflight render failed for "${sceneId}": ${error.message}\n${stderr}`));
           return;
         }
         const videoPath = findVideoPath(mediaDir, PREFLIGHT_QUALITY);
         if (!videoPath) {
-          reject(new Error(`Preflight did not produce a video for "${scene.sceneId}".`));
+          reject(new Error(`Preflight did not produce a video for "${sceneId}".`));
           return;
         }
         resolve({ reportPath, videoPath, sceneDir });
@@ -299,6 +301,7 @@ export async function preflightScene(
   jobDir: string,
   assets?: string[],
 ): Promise<PreflightReport> {
+  const sceneId = parseSceneId(scene.sceneId);
   const { reportPath, videoPath, sceneDir } = await runManimPreflight(scene, jobDir, assets);
   const raw = JSON.parse(readFileSync(reportPath, "utf-8")) as RawPreflightFile;
   const snapshots = raw.snapshots ?? [];
@@ -318,14 +321,14 @@ export async function preflightScene(
   const limitedSnapshots = snapshots.slice(0, 5);
   const keyframes: string[] = [];
   for (const snapshot of limitedSnapshots) {
-    const outputPath = join(keyframesDir, `${scene.sceneId}-${snapshot.beatId}.jpg`);
+    const outputPath = join(keyframesDir, `${sceneId}-${snapshot.beatId}.jpg`);
     await extractThumbnail(videoPath, outputPath, Math.max(0.05, snapshot.timestampSeconds));
     keyframes.push(outputPath);
   }
 
   const issues = analyzed.issues.map((issue) => ({
     ...issue,
-    sceneId: scene.sceneId,
+    sceneId,
   }));
   const report: PreflightReport = {
     passed: !issues.some((issue) => issue.severity === "error"),
@@ -336,7 +339,7 @@ export async function preflightScene(
   };
 
   writeFileSync(
-    join(jobDir, "preflight", `${scene.sceneId}.json`),
+    join(jobDir, "preflight", `${sceneId}.json`),
     JSON.stringify(report, null, 2),
     "utf-8",
   );

@@ -95,9 +95,12 @@ export async function POST(
       // Unblock any waiting gates so cleanup can run.
       if (controller.pausePromise) controller.resume();
       if (controller.approvePlan) {
+        if (!controller.currentPlan) {
+          return NextResponse.json({ ok: false, error: "No plan available to approve during abort." }, { status: 409 });
+        }
         // Approve with whatever we have so the gate resolves; the abort
         // check downstream will short-circuit before work continues.
-        controller.approvePlan(controller.currentPlan!);
+        controller.approvePlan(controller.currentPlan);
       }
       if (controller.confirmPipeline) controller.confirmPipeline();
       if (controller.currentSceneAbort) controller.currentSceneAbort.abort();
@@ -194,14 +197,6 @@ export async function POST(
     case "continue": {
       if (!controller.confirmPipeline) {
         return NextResponse.json({ ok: false, error: "Pipeline is not awaiting confirmation." }, { status: 409 });
-      }
-      // Safety check: reject if >20% scenes failed
-      const total = controller.currentPlan?.sceneBreakdown.length ?? 1;
-      const failed = controller.currentPlan?.sceneBreakdown.filter((s) =>
-        controller.sceneStates[s.sceneId]?.status === "failed",
-      ).length ?? 0;
-      if (failed / total > 0.20) {
-        return NextResponse.json({ ok: false, error: "Too many scenes failed to continue." }, { status: 409 });
       }
       controller.confirmPipeline();
       return NextResponse.json({ ok: true, status: "continued" });

@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import { Textarea } from "@/components/ui/textarea";
 import { useAppStore } from "@/lib/store";
 import type { PipelineStage, ValidationIssue } from "@/lib/pipeline/types";
+import { getStageCompleteStatus } from "@/lib/pipeline/event-reducer";
 import { useHydrated } from "@/hooks/useHydrated";
 
 /* ------------------------------------------------------------------ */
@@ -360,7 +361,7 @@ export function PromptComposer() {
 
             case "stage-complete":
               updatePipelineStage(event.stage as PipelineStage, {
-                status: (event.result as { status: string })?.status === "skipped" ? "skipped" : "success",
+                status: getStageCompleteStatus(event),
                 progress: 100,
               });
               break;

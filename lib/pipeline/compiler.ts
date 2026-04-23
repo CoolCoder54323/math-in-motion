@@ -1,6 +1,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { buildCompiledPython } from "./manim-kit";
+import { parseSceneId } from "./scene-id";
 import type { GeneratedScene, SceneDesignMode, SceneIR } from "./types";
 
 export function sceneIdToClassName(sceneId: string): string {
@@ -48,11 +49,12 @@ export function compileScene(sceneIR: SceneIR, overrideClassName?: string): Gene
 }
 
 export function persistCompiledScene(jobDir: string, scene: GeneratedScene): void {
+  const sceneId = parseSceneId(scene.sceneId);
   mkdirSync(join(jobDir, "scenes"), { recursive: true });
   mkdirSync(join(jobDir, "scene-ir"), { recursive: true });
-  writeFileSync(join(jobDir, "scenes", `${scene.sceneId}.py`), scene.pythonCode, "utf-8");
+  writeFileSync(join(jobDir, "scenes", `${sceneId}.py`), scene.pythonCode, "utf-8");
   writeFileSync(
-    join(jobDir, "scene-ir", `${scene.sceneId}.json`),
+    join(jobDir, "scene-ir", `${sceneId}.json`),
     JSON.stringify(scene.sceneIR, null, 2),
     "utf-8",
   );
