@@ -1,4 +1,5 @@
 import type { PipelineInput, PlanOutput, SceneEntry, SceneIR, SceneIRAction, SceneRole } from "./types";
+import { isValidSceneIR } from "./contracts";
 
 const CAPABILITY_CATALOG = `
 AVAILABLE OBJECT KINDS
@@ -221,6 +222,9 @@ export function parseSceneDesignResponse(raw: string): SceneIR[] {
   return parsed.scenes.map((entry) => {
     if (!entry.sceneIR) {
       throw new Error("Scene design response is missing sceneIR.");
+    }
+    if (!isValidSceneIR(entry.sceneIR)) {
+      throw new Error("Scene design response failed contract validation.");
     }
     return entry.sceneIR;
   });

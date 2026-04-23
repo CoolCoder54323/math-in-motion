@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getController } from "@/lib/pipeline/executor";
 import type { PlanOutput, SceneEntry } from "@/lib/pipeline/types";
+import { isValidPlanOutput, parseSceneId } from "@/lib/pipeline/contracts";
 
 /**
  * POST /api/pipeline/[jobId]/control
@@ -26,24 +27,6 @@ type SetAutoContinueBody = { action: "set-auto-continue"; value: boolean };
 type LegacyBody = { action: "pause" | "resume" | "abort" };
 
 type ControlBody = LegacyBody | ApprovePlanBody | UpdatePlanBody | RegenerateBody | HeartbeatBody | ContinueBody | SetAutoContinueBody;
-
-/* Structural validation — defensively walk the plan shape before accepting it. */
-function isValidPlan(p: unknown): p is PlanOutput {
-  if (!p || typeof p !== "object") return false;
-  const plan = p as Record<string, unknown>;
-  if (typeof plan.title !== "string") return false;
-  if (typeof plan.estimatedDuration !== "number") return false;
-  if (!Array.isArray(plan.steps)) return false;
-  if (!Array.isArray(plan.sceneBreakdown)) return false;
-  if (plan.sceneBreakdown.length === 0) return false;
-  for (const s of plan.sceneBreakdown as Record<string, unknown>[]) {
-    if (typeof s.sceneId !== "string" || !s.sceneId) return false;
-    if (typeof s.description !== "string") return false;
-    if (typeof s.mathContent !== "string") return false;
-    if (typeof s.estimatedSeconds !== "number") return false;
-  }
-  return true;
-}
 
 export async function POST(
   request: Request,
@@ -95,12 +78,19 @@ export async function POST(
       // Unblock any waiting gates so cleanup can run.
       if (controller.pausePromise) controller.resume();
       if (controller.approvePlan) {
-        if (!controller.currentPlan) {
-          return NextResponse.json({ ok: false, error: "No plan available to approve during abort." }, { status: 409 });
-        }
-        // Approve with whatever we have so the gate resolves; the abort
-        // check downstream will short-circuit before work continues.
-        controller.approvePlan(controller.currentPlan);
+        // Resolve approval gate even if a plan does not exist yet to avoid hanging abort.
+        const fallbackPlan: PlanOutput = controller.currentPlan ?? {
+          title: "aborted",
+          estimatedDuration: 30,
+          steps: [{ label: "Abort", narration: "Pipeline aborted before plan approval." }],
+          sceneBreakdown: [{
+            sceneId: "abort-placeholder",
+            description: "Abort placeholder scene",
+            mathContent: "",
+            estimatedSeconds: 5,
+          }],
+        };
+        controller.approvePlan(fallbackPlan);
       }
       if (controller.confirmPipeline) controller.confirmPipeline();
       if (controller.currentSceneAbort) controller.currentSceneAbort.abort();
@@ -108,7 +98,7 @@ export async function POST(
     }
 
     case "approve-plan": {
-      if (!isValidPlan(body.plan)) {
+      if (!isValidPlanOutput(body.plan)) {
         return NextResponse.json(
           { error: "Invalid plan shape." },
           { status: 400 },
@@ -126,7 +116,7 @@ export async function POST(
     }
 
     case "update-plan": {
-      if (!isValidPlan(body.plan)) {
+      if (!isValidPlanOutput(body.plan)) {
         return NextResponse.json(
           { error: "Invalid plan shape." },
           { status: 400 },
@@ -137,9 +127,10 @@ export async function POST(
     }
 
     case "regenerate-scene": {
-      if (!body.sceneId || typeof body.sceneId !== "string") {
+      const sceneId = parseSceneId(body.sceneId);
+      if (!sceneId) {
         return NextResponse.json(
-          { error: "Expected 'sceneId' string." },
+          { error: "Expected lowercase-kebab sceneId." },
           { status: 400 },
         );
       }
@@ -150,20 +141,20 @@ export async function POST(
         );
       }
       const exists = controller.currentPlan.sceneBreakdown.some(
-        (s) => s.sceneId === body.sceneId,
+        (s) => s.sceneId === sceneId,
       );
       if (!exists) {
         return NextResponse.json(
-          { error: `Unknown sceneId "${body.sceneId}".` },
+          { error: `Unknown sceneId "${sceneId}".` },
           { status: 400 },
         );
       }
 
       // Dedup: if already queued, just merge any sceneUpdate into the
       // existing request.
-      if (controller.regenerateInFlight.has(body.sceneId)) {
+      if (controller.regenerateInFlight.has(sceneId)) {
         const existing = controller.regenerateQueue.find(
-          (r) => r.sceneId === body.sceneId,
+          (r) => r.sceneId === sceneId,
         );
         if (existing && body.sceneUpdate) {
           existing.sceneUpdate = { ...existing.sceneUpdate, ...body.sceneUpdate };
@@ -171,9 +162,9 @@ export async function POST(
         return NextResponse.json({ ok: true, status: "regenerate-queued-dedup" });
       }
 
-      controller.regenerateInFlight.add(body.sceneId);
+      controller.regenerateInFlight.add(sceneId);
       controller.regenerateQueue.push({
-        sceneId: body.sceneId,
+        sceneId,
         sceneUpdate: body.sceneUpdate,
       });
 

@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
-import { readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
-import { join } from "node:path";
 
 import { getJobDir } from "@/lib/pipeline/job-manager";
+import { createVideoResponse } from "@/lib/pipeline/video-response";
+import { safeJobPath } from "@/lib/pipeline/fs-paths";
+import { parseSceneId } from "@/lib/pipeline/contracts";
 
 /**
  * GET /api/video/[jobId]/[sceneId]
@@ -22,7 +23,8 @@ export async function GET(
     return NextResponse.json({ error: "Invalid job ID." }, { status: 400 });
   }
 
-  if (!/^[a-z0-9_.-]+$/.test(sceneId)) {
+  const parsedSceneId = parseSceneId(sceneId);
+  if (!parsedSceneId) {
     return NextResponse.json({ error: "Invalid scene ID." }, { status: 400 });
   }
 
@@ -31,7 +33,7 @@ export async function GET(
     return NextResponse.json({ error: "Job not found." }, { status: 404 });
   }
 
-  const clipPath = join(jobDir, "clips", `${sceneId}.mp4`);
+  const clipPath = safeJobPath(jobDir, "clips", parsedSceneId, "mp4");
   if (!existsSync(clipPath)) {
     return NextResponse.json(
       { error: "Scene clip not found or not yet rendered." },
@@ -40,17 +42,10 @@ export async function GET(
   }
 
   try {
-    const buffer = await readFile(clipPath);
-    return new Response(buffer, {
-      headers: {
-        "Content-Type": "video/mp4",
-        "Content-Length": String(buffer.length),
-        "Cache-Control": "private, max-age=3600",
-      },
-    });
+    return createVideoResponse(_request, clipPath);
   } catch {
     return NextResponse.json(
-      { error: "Failed to read clip file." },
+      { error: "Failed to stream clip file." },
       { status: 500 },
     );
   }
