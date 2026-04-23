@@ -15,6 +15,9 @@ export type PipelineContext = {
   resumeFrom?: PipelineStage;
 
   lastLLMUsage?: LLMUsage;
+
+  /** Asset filenames available for ImageMobject / SVGMobject use. */
+  assets?: string[];
 };
 
 /* ------------------------------------------------------------------ */

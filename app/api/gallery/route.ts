@@ -1,5 +1,98 @@
-import { getGalleryEntries, getGalleryEntry } from "@/lib/gallery";
-import { readManifest, getJobDir, readPlan } from "@/lib/pipeline/job-manager";
+import { getGalleryEntries, getGalleryEntry, deleteGalleryEntry, type GalleryEntry } from "@/lib/gallery";
+import { deleteJobDir, getJobDir, readManifest, readPlan, loadSceneStates } from "@/lib/pipeline/job-manager";
+import { getController, removeController } from "@/lib/pipeline/executor";
+import type { PipelineManifest, PlanOutput, PipelineStage } from "@/lib/pipeline/types";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
+
+type EnrichedEntry = GalleryEntry & {
+  manifestStatus?: string;
+  plan?: unknown;
+  sceneStates?: Record<string, unknown>;
+  thumbnailUrl?: string;
+  failedSceneCount?: number;
+};
+
+/**
+ * Derive a gallery-friendly status from the manifest.
+ * If the manifest says "running", we infer "generating" or "building"
+ * from which stages have completed.
+ */
+function deriveStatusFromManifest(manifest: PipelineManifest): GalleryEntry["status"] {
+  if (manifest.status === "complete") return "complete";
+  if (manifest.status === "failed") return "failed";
+  if (manifest.status === "interrupted") return "failed";
+  if (manifest.status === "awaiting-approval") return "awaiting-approval";
+  if (manifest.status === "paused") return "generating";
+
+  // For "running" (or legacy "generating"/"building"), derive from stages
+  const planStage = manifest.stages.find((s) => s.stage === "plan");
+  const planDone = planStage?.status === "success";
+
+  if (planDone) {
+    return "building";
+  }
+  return "generating";
+}
+
+/**
+ * Derive the current stage from the manifest by looking at which stages
+ * have completed and which is in-progress.
+ */
+function deriveCurrentStageFromManifest(manifest: PipelineManifest): PipelineStage | undefined {
+  if (manifest.currentStage) return manifest.currentStage;
+
+  const stageOrder: PipelineStage[] = ["plan", "codegen", "validate", "render", "postprocess", "compose"];
+  for (const stage of stageOrder) {
+    const s = manifest.stages.find((st) => st.stage === stage);
+    if (!s || s.status !== "success") {
+      return stage;
+    }
+  }
+  return undefined;
+}
+
+function enrichEntry(entry: GalleryEntry): EnrichedEntry {
+  let enrichedEntry: EnrichedEntry = { ...entry };
+  const jobDir = getJobDir(entry.jobId);
+
+  if (jobDir) {
+    const manifest = readManifest(jobDir);
+    const plan = readPlan(jobDir);
+
+    if (manifest) {
+      const derivedStatus = deriveStatusFromManifest(manifest);
+      const derivedStage = deriveCurrentStageFromManifest(manifest);
+
+      enrichedEntry = {
+        ...enrichedEntry,
+        status: derivedStatus,
+        currentStage: derivedStage ?? enrichedEntry.currentStage,
+        manifestStatus: manifest.status,
+      };
+    }
+
+    // Always return plan if it exists, not just for awaiting-approval
+    if (plan) {
+      enrichedEntry = { ...enrichedEntry, plan };
+    }
+
+    if (enrichedEntry.status !== "complete") {
+      const states = loadSceneStates(jobDir, entry.jobId, manifest, plan as PlanOutput | null);
+      if (Object.keys(states).length > 0) {
+        const failedSceneCount = Object.values(states).filter((s) => s.status === "failed").length;
+        enrichedEntry = { ...enrichedEntry, sceneStates: states, failedSceneCount };
+      }
+    }
+
+    // Add thumbnail URL if it exists
+    if (existsSync(join(jobDir, "thumbnail.jpg"))) {
+      enrichedEntry = { ...enrichedEntry, thumbnailUrl: `/api/thumbnail/${entry.jobId}` };
+    }
+  }
+
+  return enrichedEntry;
+}
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -14,63 +107,57 @@ export async function GET(request: Request) {
       });
     }
 
-    let enriched = { ...entry };
-    const jobDir = getJobDir(jobId);
-
-    if (jobDir) {
-      // Enrich with live manifest data if status has changed
-      const manifest = readManifest(jobDir);
-      if (manifest && manifest.status !== entry.status) {
-        enriched = {
-          ...enriched,
-          status: manifest.status === "complete" ? "complete" :
-                  manifest.status === "awaiting-approval" ? "awaiting-approval" :
-                  manifest.status === "failed" ? "failed" : enriched.status,
-          manifestStatus: manifest.status,
-        };
-      }
-
-      // Always include plan data for awaiting-approval entries (from
-      // either the entry status or the enriched manifest status)
-      if (enriched.status === "awaiting-approval") {
-        const plan = readPlan(jobDir);
-        if (plan) {
-          enriched = { ...enriched, plan };
-        }
-      }
-    }
-
+    const enriched = enrichEntry(entry);
     return Response.json(enriched);
   }
 
   const entries = getGalleryEntries();
-
-  // Enrich entries with live manifest data
-  const enriched = entries.map((entry) => {
-    let enrichedEntry = { ...entry };
-    const jobDir = getJobDir(entry.jobId);
-    if (jobDir) {
-      const manifest = readManifest(jobDir);
-      if (manifest && manifest.status !== entry.status) {
-        enrichedEntry = {
-          ...enrichedEntry,
-          status: manifest.status === "complete" ? "complete" :
-                  manifest.status === "awaiting-approval" ? "awaiting-approval" :
-                  manifest.status === "failed" ? "failed" : enrichedEntry.status,
-          manifestStatus: manifest.status,
-        };
-      }
-
-      // Include plan data for awaiting-approval entries
-      if (enrichedEntry.status === "awaiting-approval") {
-        const plan = readPlan(jobDir);
-        if (plan) {
-          enrichedEntry = { ...enrichedEntry, plan };
-        }
-      }
-    }
-    return enrichedEntry;
-  });
+  const enriched = entries.map(enrichEntry);
 
   return Response.json(enriched);
+}
+
+export async function DELETE(request: Request) {
+  let jobId: string | null = null;
+
+  try {
+    const body = await request.json();
+    if (body && typeof body === "object" && "jobId" in body) {
+      jobId = body.jobId as string;
+    }
+  } catch {}
+
+  if (!jobId) {
+    const { searchParams } = new URL(request.url);
+    jobId = searchParams.get("jobId");
+  }
+
+  if (!jobId || !/^[a-f0-9-]{36}$/.test(jobId)) {
+    return new Response(JSON.stringify({ error: "Missing or invalid jobId." }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  // Try to abort any active pipeline
+  const controller = getController(jobId);
+  if (controller) {
+    try {
+      controller.abort.abort();
+      if (controller.pausePromise) controller.resume();
+      if (controller.approvePlan && controller.currentPlan) {
+        controller.approvePlan(controller.currentPlan);
+      }
+      if (controller.currentSceneAbort) controller.currentSceneAbort.abort();
+    } catch {}
+    removeController(jobId);
+  }
+
+  // Remove from gallery
+  deleteGalleryEntry(jobId);
+
+  // Remove job files
+  deleteJobDir(jobId);
+
+  return Response.json({ ok: true });
 }

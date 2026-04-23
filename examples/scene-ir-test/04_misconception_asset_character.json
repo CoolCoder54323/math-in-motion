@@ -1,0 +1,129 @@
+{
+  "scenes": [
+    {
+      "sceneId": "address_misconception_skip_counting_character",
+      "sceneIR": {
+        "metadata": {
+          "sceneId": "address_misconception_skip_counting_character",
+          "role": "address_misconception",
+          "visualIntent": "Use a character-led split panel to contrast an incorrect skip-counting method with the correct grouping strategy.",
+          "densityTarget": 0.41,
+          "baseClass": "Scene"
+        },
+        "layout": {
+          "safeArea": {
+            "xMin": -6.5,
+            "xMax": 6.5,
+            "yMin": -3.5,
+            "yMax": 3.5
+          },
+          "zones": [
+            { "id": "title", "x": 0, "y": 2.8, "width": 11, "height": 1.0, "note": "Title lane" },
+            { "id": "left", "x": -3.3, "y": 0.7, "width": 4.1, "height": 3.7, "note": "Wrong method lane" },
+            { "id": "right", "x": 3.3, "y": 0.7, "width": 4.1, "height": 3.7, "note": "Correct method lane" },
+            { "id": "hero", "x": 0, "y": -0.5, "width": 3.0, "height": 2.8, "note": "Character lane" },
+            { "id": "footer", "x": 0, "y": -2.75, "width": 11, "height": 1.0, "note": "Takeaway lane" }
+          ],
+          "continuitySlots": ["comparison_panel"]
+        },
+        "objects": [
+          {
+            "id": "title",
+            "kind": "text",
+            "role": "scene_title",
+            "anchor": { "zone": "title", "align": "center" },
+            "props": { "text": "Common Mistake: Skip Counting", "fontSize": 48, "color": "#2D2013" },
+            "relatedTo": [],
+            "zIndex": 5
+          },
+          {
+            "id": "comparison_panel",
+            "kind": "compound.misconception_panel",
+            "role": "wrong_vs_right_panel",
+            "anchor": { "zone": "left", "align": "center", "dx": 3.3 },
+            "props": {
+              "wrongTitle": "Wrong Approach",
+              "wrongBody": "Adds by 3s and misses groups",
+              "rightTitle": "Correct Approach",
+              "rightBody": "Count equal groups first"
+            },
+            "relatedTo": ["wrong_stamp", "right_stamp"],
+            "zIndex": 2
+          },
+          {
+            "id": "mentor_character",
+            "kind": "compound.asset_stage",
+            "role": "teacher_character",
+            "anchor": { "zone": "hero", "align": "center" },
+            "props": {
+              "asset": "spongebob.png",
+              "scale": 0.75,
+              "caption": "Let's fix this together!"
+            },
+            "relatedTo": ["comparison_panel"],
+            "zIndex": 4
+          },
+          {
+            "id": "wrong_stamp",
+            "kind": "text",
+            "role": "wrong_marker",
+            "anchor": { "zone": "left", "align": "top", "dy": 0.15 },
+            "props": { "text": "X", "fontSize": 72, "color": "#FF8C42" },
+            "relatedTo": ["comparison_panel"],
+            "zIndex": 6
+          },
+          {
+            "id": "right_stamp",
+            "kind": "text",
+            "role": "right_marker",
+            "anchor": { "zone": "right", "align": "top", "dy": 0.15 },
+            "props": { "text": "✓", "fontSize": 72, "color": "#4FC3F7" },
+            "relatedTo": ["comparison_panel"],
+            "zIndex": 6
+          },
+          {
+            "id": "footer",
+            "kind": "text",
+            "role": "summary",
+            "anchor": { "zone": "footer", "align": "center" },
+            "props": { "text": "Group first, then multiply.", "fontSize": 30 },
+            "relatedTo": [],
+            "zIndex": 5
+          }
+        ],
+        "beats": [
+          {
+            "id": "show_problem",
+            "narration": "Here is a common error students make with grouping problems.",
+            "actions": [
+              { "type": "show", "targets": ["title", "comparison_panel"], "animation": "fade_in", "runTime": 1.0, "stagger": 0.1 },
+              { "type": "show", "targets": ["mentor_character"], "animation": "fade_in", "runTime": 0.6 }
+            ],
+            "holdSeconds": 0.3
+          },
+          {
+            "id": "mark_wrong",
+            "narration": "The left strategy is wrong because it breaks the equal groups.",
+            "actions": [
+              { "type": "show", "targets": ["wrong_stamp"], "animation": "write", "runTime": 0.4 },
+              { "type": "emphasize", "targets": ["wrong_stamp"], "animation": "indicate", "runTime": 0.5 }
+            ],
+            "holdSeconds": 0.2
+          },
+          {
+            "id": "confirm_right",
+            "narration": "The right strategy preserves equal groups and gives the correct result.",
+            "actions": [
+              { "type": "show", "targets": ["right_stamp", "footer"], "animation": "fade_in", "runTime": 0.7, "stagger": 0.1 },
+              { "type": "emphasize", "targets": ["right_stamp"], "animation": "circumscribe", "runTime": 0.5 }
+            ],
+            "holdSeconds": 0.6
+          }
+        ],
+        "continuity": {
+          "keep": ["comparison_panel", "footer"]
+        }
+      }
+    }
+  ]
+}

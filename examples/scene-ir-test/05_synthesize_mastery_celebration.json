@@ -1,0 +1,97 @@
+{
+  "scenes": [
+    {
+      "sceneId": "synthesize_mastery_celebration",
+      "sceneIR": {
+        "metadata": {
+          "sceneId": "synthesize_mastery_celebration",
+          "role": "synthesize",
+          "visualIntent": "Close the lesson by connecting model, equation, and real-world meaning with a celebratory finish.",
+          "densityTarget": 0.36,
+          "baseClass": "Scene"
+        },
+        "layout": {
+          "safeArea": {
+            "xMin": -6.5,
+            "xMax": 6.5,
+            "yMin": -3.5,
+            "yMax": 3.5
+          },
+          "zones": [
+            { "id": "title", "x": 0, "y": 2.8, "width": 11, "height": 1.0, "note": "Title lane" },
+            { "id": "left", "x": -3.2, "y": 0.5, "width": 4.2, "height": 3.7, "note": "Visual model lane" },
+            { "id": "right", "x": 3.2, "y": 0.5, "width": 4.2, "height": 3.7, "note": "Symbolic lane" },
+            { "id": "footer", "x": 0, "y": -2.75, "width": 11, "height": 1.1, "note": "Final takeaway" }
+          ],
+          "continuitySlots": []
+        },
+        "objects": [
+          {
+            "id": "title",
+            "kind": "text",
+            "role": "scene_title",
+            "anchor": { "zone": "title", "align": "center" },
+            "props": { "text": "You Can Translate Models to Math", "fontSize": 46 },
+            "relatedTo": [],
+            "zIndex": 4
+          },
+          {
+            "id": "model",
+            "kind": "compound.percent_grid",
+            "role": "final_visual_model",
+            "anchor": { "zone": "left", "align": "center" },
+            "props": { "highlighted": 75, "cellSize": 0.24 },
+            "relatedTo": ["equation"],
+            "zIndex": 2
+          },
+          {
+            "id": "equation",
+            "kind": "compound.callout_card",
+            "role": "symbolic_summary",
+            "anchor": { "zone": "right", "align": "center" },
+            "props": {
+              "title": "\\frac{3}{4} = 75%",
+              "body": "Model -> Fraction -> Percent",
+              "width": 3.8,
+              "height": 2.2,
+              "fillColor": "#DFF3FF"
+            },
+            "relatedTo": ["model"],
+            "zIndex": 3
+          },
+          {
+            "id": "takeaway",
+            "kind": "text",
+            "role": "final_takeaway",
+            "anchor": { "zone": "footer", "align": "center" },
+            "props": { "text": "You now have three ways to represent the same idea.", "fontSize": 28 },
+            "relatedTo": [],
+            "zIndex": 5
+          }
+        ],
+        "beats": [
+          {
+            "id": "final_recap",
+            "narration": "Let's connect the visual model and symbolic form one last time.",
+            "actions": [
+              { "type": "show", "targets": ["title", "model", "equation"], "animation": "fade_in", "runTime": 1.0, "stagger": 0.12 }
+            ],
+            "holdSeconds": 0.4
+          },
+          {
+            "id": "celebration",
+            "narration": "Great work. You can move between representations confidently.",
+            "actions": [
+              { "type": "emphasize", "targets": ["model", "equation"], "animation": "circumscribe", "runTime": 0.8 },
+              { "type": "show", "targets": ["takeaway"], "animation": "write", "runTime": 0.6 }
+            ],
+            "holdSeconds": 0.8
+          }
+        ],
+        "continuity": {
+          "keep": []
+        }
+      }
+    }
+  ]
+}

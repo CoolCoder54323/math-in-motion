@@ -182,7 +182,7 @@ function StepCard({
         </button>
 
         {/* Progress bar for running stage */}
-        {isRunning && state.progress > 0 && !isPaused && (
+        {isRunning && !isPaused && (
           <div className="px-5 pb-4">
             <div className="h-2 w-full overflow-hidden rounded-full bg-[color:var(--rule)]/15">
               <div
@@ -287,6 +287,16 @@ function StageArtifactContent({ stage, isRunning }: { stage: PipelineStage; isRu
                 <div className="min-w-0 flex-1">
                   <p className="font-heading text-xs font-semibold text-[color:var(--umber)]">
                     {scene.sceneId}
+                    {scene.role && (
+                      <span className="ml-1.5 inline-flex items-center rounded-full bg-[color:var(--grape)]/20 px-1.5 py-0.5 font-heading text-[9px] uppercase tracking-[0.15em] text-[color:var(--grape)] ring-1 ring-[color:var(--grape)]/30">
+                        {scene.role.replace("_", " ")}
+                      </span>
+                    )}
+                    {scene.hasPredictPause && (
+                      <span className="ml-1 inline-flex items-center rounded-full bg-[color:var(--sunflower)]/35 px-1.5 py-0.5 font-heading text-[9px] uppercase tracking-[0.15em] text-[color:var(--sunflower-deep)] ring-1 ring-[color:var(--sunflower-deep)]/30">
+                        pause
+                      </span>
+                    )}
                   </p>
                   <p className="font-heading text-[11px] italic text-[color:var(--umber)]/60">
                     <MathText>{scene.description}</MathText>

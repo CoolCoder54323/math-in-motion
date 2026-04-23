@@ -1,0 +1,130 @@
+{
+  "scenes": [
+    {
+      "sceneId": "worked_example_fraction_to_percent_cinematic",
+      "sceneIR": {
+        "metadata": {
+          "sceneId": "worked_example_fraction_to_percent_cinematic",
+          "role": "worked_example",
+          "visualIntent": "Convert a fraction to percent with a camera push and synchronized number model.",
+          "densityTarget": 0.46,
+          "baseClass": "MovingCameraScene"
+        },
+        "layout": {
+          "safeArea": {
+            "xMin": -6.5,
+            "xMax": 6.5,
+            "yMin": -3.5,
+            "yMax": 3.5
+          },
+          "zones": [
+            { "id": "title", "x": 0, "y": 2.8, "width": 11, "height": 1.0, "note": "Title lane" },
+            { "id": "hero", "x": 0, "y": 0.9, "width": 8.0, "height": 3.7, "note": "Conversion board lane" },
+            { "id": "left", "x": -3.4, "y": -0.2, "width": 3.1, "height": 3.2, "note": "Fraction side" },
+            { "id": "right", "x": 3.4, "y": -0.2, "width": 3.1, "height": 3.2, "note": "Percent grid side" },
+            { "id": "footer", "x": 0, "y": -2.65, "width": 11, "height": 1.15, "note": "Conclusion lane" }
+          ],
+          "continuitySlots": ["conversion_board", "percent_grid"]
+        },
+        "objects": [
+          {
+            "id": "title",
+            "kind": "text",
+            "role": "scene_title",
+            "anchor": { "zone": "title", "align": "center" },
+            "props": { "text": "From Fraction to Percent", "fontSize": 50 },
+            "relatedTo": [],
+            "zIndex": 4
+          },
+          {
+            "id": "conversion_board",
+            "kind": "compound.fraction_percent_board",
+            "role": "conversion_anchor",
+            "anchor": { "zone": "hero", "align": "center" },
+            "props": {
+              "fractionTex": "\\frac{3}{5}",
+              "percentText": "60%",
+              "caption": "Scale to hundredths, then read as percent.",
+              "fractionScale": 1.25
+            },
+            "relatedTo": ["percent_grid"],
+            "zIndex": 3
+          },
+          {
+            "id": "percent_grid",
+            "kind": "compound.percent_grid",
+            "role": "visual_percent_model",
+            "anchor": { "zone": "right", "align": "center", "dy": -0.05 },
+            "props": { "highlighted": 60, "cellSize": 0.23 },
+            "relatedTo": ["conversion_board"],
+            "zIndex": 2
+          },
+          {
+            "id": "step_card",
+            "kind": "compound.callout_card",
+            "role": "strategy_card",
+            "anchor": { "zone": "left", "align": "center", "dy": -0.05 },
+            "props": {
+              "title": "Strategy",
+              "body": "3/5 = 60/100",
+              "width": 3.0,
+              "height": 1.9,
+              "fillColor": "#E8D5A3"
+            },
+            "relatedTo": ["conversion_board"],
+            "zIndex": 2
+          },
+          {
+            "id": "footer",
+            "kind": "text",
+            "role": "summary",
+            "anchor": { "zone": "footer", "align": "center" },
+            "props": { "text": "Percent means 'out of 100'.", "fontSize": 30 },
+            "relatedTo": [],
+            "zIndex": 5
+          }
+        ],
+        "beats": [
+          {
+            "id": "establish",
+            "narration": "Let's convert three fifths into a percent.",
+            "actions": [
+              { "type": "show", "targets": ["title"], "animation": "write", "runTime": 0.8 },
+              { "type": "show", "targets": ["conversion_board", "step_card"], "animation": "fade_in", "runTime": 1.0, "stagger": 0.1 }
+            ],
+            "holdSeconds": 0.3
+          },
+          {
+            "id": "camera_push",
+            "narration": "Now zoom in on the conversion bridge.",
+            "actions": [
+              { "type": "custom", "block": "camera_push", "runTime": 0.8 },
+              { "type": "emphasize", "targets": ["conversion_board"], "animation": "circumscribe", "runTime": 0.7 }
+            ],
+            "holdSeconds": 0.2
+          },
+          {
+            "id": "visualize_60_percent",
+            "narration": "Sixty of one hundred squares are shaded, so the percent is sixty.",
+            "actions": [
+              { "type": "show", "targets": ["percent_grid"], "animation": "create", "runTime": 1.0 },
+              { "type": "show", "targets": ["footer"], "animation": "fade_in", "runTime": 0.6 }
+            ],
+            "holdSeconds": 0.6
+          }
+        ],
+        "continuity": {
+          "keep": ["conversion_board", "percent_grid", "footer"]
+        },
+        "customBlocks": {
+          "timeline": [
+            {
+              "id": "camera_push",
+              "code": "def camera_push(runtime): runtime.scene.play(runtime.scene.camera.frame.animate.scale(0.9).move_to(runtime.get('conversion_board').get_center()), run_time=0.8)"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

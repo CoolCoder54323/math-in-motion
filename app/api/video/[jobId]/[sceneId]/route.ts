@@ -22,7 +22,7 @@ export async function GET(
     return NextResponse.json({ error: "Invalid job ID." }, { status: 400 });
   }
 
-  if (!/^[a-z0-9-]+$/.test(sceneId)) {
+  if (!/^[a-z0-9_.-]+$/.test(sceneId)) {
     return NextResponse.json({ error: "Invalid scene ID." }, { status: 400 });
   }
 

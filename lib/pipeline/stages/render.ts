@@ -10,6 +10,8 @@ import {
 import { join } from "node:path";
 import type { PipelineStageHandler } from "../stage";
 import type { PipelineEvent, GeneratedScene, RenderOutput } from "../types";
+import { getManimKitPython } from "../manim-kit";
+import { addTrackedPid, removeTrackedPid } from "../job-manager";
 
 /* ------------------------------------------------------------------ */
 /*  Stage 4: Manim Scene Rendering                                      */
@@ -19,7 +21,7 @@ import type { PipelineEvent, GeneratedScene, RenderOutput } from "../types";
 /* ------------------------------------------------------------------ */
 
 const MANIM_RENDER_TIMEOUT_MS = 90_000;
-const MAX_PARALLEL_RENDERS = 2;
+const MAX_PARALLEL_RENDERS = 7;
 
 type RenderInput = {
   scenes: GeneratedScene[];
@@ -43,12 +45,25 @@ export async function renderScene(
   jobDir: string,
   quality: "l" | "m" | "h",
   signal?: AbortSignal,
+  assets?: string[],
 ): Promise<SceneRenderResult> {
   const sceneDir = join(jobDir, "scenes", scene.sceneId);
   mkdirSync(sceneDir, { recursive: true });
 
   const sceneFile = join(sceneDir, "scene.py");
   writeFileSync(sceneFile, scene.pythonCode, "utf-8");
+  writeFileSync(join(sceneDir, "manim_kit.py"), getManimKitPython(), "utf-8");
+
+  // Copy assets into the scene directory so ImageMobject / SVGMobject can reference them
+  if (assets && assets.length > 0) {
+    const assetsDir = join(jobDir, "assets");
+    for (const assetName of assets) {
+      const src = join(assetsDir, assetName);
+      if (existsSync(src)) {
+        copyFileSync(src, join(sceneDir, assetName));
+      }
+    }
+  }
 
   const mediaDir = join(sceneDir, "media");
 
@@ -74,12 +89,14 @@ export async function renderScene(
         env: { ...process.env, PYTHONUNBUFFERED: "1" },
       },
       (error, _stdout, stderr) => {
+        if (proc.pid) removeTrackedPid(proc.pid);
         if (signal) signal.removeEventListener("abort", onAbort);
 
         if (error) {
+          const stderrHint = stderr?.trim() ? `\n\nSTDERR:\n${stderr.trim()}` : "";
           const errMsg = error.killed || signal?.aborted
             ? `Scene "${scene.sceneId}" ${signal?.aborted ? "aborted" : "timed out"}.`
-            : `Scene "${scene.sceneId}" render failed: ${error.message}`;
+            : `Scene "${scene.sceneId}" render failed: ${error.message}${stderrHint}`;
           resolve({ ok: false, sceneId: scene.sceneId, error: errMsg });
           return;
         }
@@ -130,6 +147,10 @@ export async function renderScene(
       },
     );
 
+    if (proc.pid) {
+      addTrackedPid(proc.pid, jobDir.split("/").pop() ?? "unknown", scene.sceneId);
+    }
+
     // Kill manim process when pipeline signal aborts — prevents orphan processes.
     const onAbort = () => {
       try {
@@ -147,6 +168,7 @@ export async function renderScene(
     }
 
     proc.on("error", (err) => {
+      if (proc.pid) removeTrackedPid(proc.pid);
       if (signal) signal.removeEventListener("abort", onAbort);
       resolve({
         ok: false,
@@ -167,6 +189,7 @@ async function renderBatch(
   quality: "l" | "m" | "h",
   onProgress: (completed: number, total: number, sceneId: string, ok: boolean) => void,
   signal?: AbortSignal,
+  assets?: string[],
 ): Promise<SceneRenderResult[]> {
   const results: SceneRenderResult[] = [];
   let completed = 0;
@@ -174,7 +197,7 @@ async function renderBatch(
   for (let i = 0; i < scenes.length; i += MAX_PARALLEL_RENDERS) {
     const batch = scenes.slice(i, i + MAX_PARALLEL_RENDERS);
     const batchResults = await Promise.all(
-      batch.map((scene) => renderScene(scene, jobDir, quality, signal)),
+      batch.map((scene) => renderScene(scene, jobDir, quality, signal, assets)),
     );
 
     for (const result of batchResults) {
@@ -221,6 +244,7 @@ export const renderStage: PipelineStageHandler<RenderInput, RenderOutput> = {
         });
       },
       context.signal,
+      context.assets,
     );
 
     for (const event of progressEvents) {

@@ -1,6 +1,4 @@
 import { execFile } from "node:child_process";
-import { existsSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
 
 /* ------------------------------------------------------------------ */
 /*  FFmpeg CLI wrapper functions                                        */
@@ -215,6 +213,31 @@ export async function concatenateClips(
     ],
     120_000,
   );
+
+  return outputPath;
+}
+
+/* ------------------------------------------------------------------ */
+/*  extractThumbnail: extract a single frame from a video clip        */
+/* ------------------------------------------------------------------ */
+
+export async function extractThumbnail(
+  videoPath: string,
+  outputPath: string,
+  timeSeconds = 0.05,
+): Promise<string> {
+  await run("ffmpeg", [
+    "-y",
+    "-ss",
+    String(timeSeconds),
+    "-i",
+    videoPath,
+    "-vframes",
+    "1",
+    "-q:v",
+    "2",
+    outputPath,
+  ]);
 
   return outputPath;
 }

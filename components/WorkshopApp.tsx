@@ -4,7 +4,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { PromptComposer } from "@/components/PromptComposer";
+import { MathText } from "@/components/MathText";
 import { useAppStore } from "@/lib/store";
+import type { SceneStates } from "@/lib/store";
 import type { PlanOutput, PipelineStage } from "@/lib/pipeline/types";
 
 /* ------------------------------------------------------------------ */
@@ -91,6 +93,38 @@ function StatusPill({ status, duration }: { status: string; duration?: number })
 }
 
 /* ------------------------------------------------------------------ */
+/*  Token / cost formatting helpers                                     */
+/* ------------------------------------------------------------------ */
+
+function formatTokens(n?: number): string {
+  if (n === undefined || n === null || n === 0) return "";
+  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
+  return String(n);
+}
+
+function formatCost(usd?: number): string {
+  if (usd === undefined || usd === null) return "";
+  if (usd < 0.01) return `$${usd.toFixed(3)}`;
+  return `$${usd.toFixed(2)}`;
+}
+
+function TokenCostCaption({ state }: { state: import("@/lib/store").SceneState }) {
+  const parts: string[] = [];
+  const totalTokens = (state.inputTokens ?? 0) + (state.outputTokens ?? 0);
+  if (totalTokens > 0) {
+    parts.push(`${formatTokens(totalTokens)} tokens`);
+  }
+  const cost = formatCost(state.estimatedCostUSD);
+  if (cost) parts.push(cost);
+  if (parts.length === 0) return null;
+  return (
+    <span className="font-heading text-[9px] italic tabular-nums text-[color:var(--umber)]/45">
+      {parts.join(" · ")}
+    </span>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /*  Prompt screen                                                       */
 /* ------------------------------------------------------------------ */
 
@@ -133,10 +167,117 @@ function ApprovalScreen() {
   const approvalLoading = useAppStore((s) => s.approvalLoading);
   const approvalError = useAppStore((s) => s.approvalError);
   const approvePlan = useAppStore((s) => s.approvePlan);
+  const pipelineJobId = useAppStore((s) => s.pipelineJobId);
   const updatePlanDraft = useAppStore((s) => s.updatePlanDraft);
   const updateSceneDraft = useAppStore((s) => s.updateSceneDraft);
   const updateStepDraft = useAppStore((s) => s.updateStepDraft);
+  const setLoading = useAppStore((s) => s.setLoading);
   const resetPipeline = useAppStore((s) => s.resetPipeline);
+
+  // Heartbeat so the backend knows the user is present on the approval screen
+  useEffect(() => {
+    if (!pipelineJobId || !planApprovalPending) return;
+    const send = () => {
+      fetch(`/api/pipeline/${pipelineJobId}/control`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "heartbeat" }),
+      });
+    };
+    send();
+    const interval = setInterval(send, 3000);
+    return () => clearInterval(interval);
+  }, [pipelineJobId, planApprovalPending]);
+
+  const handleApprove = useCallback(async () => {
+    await approvePlan();
+
+    // After approval, if there's no active SSE stream (e.g., we resumed from
+    // gallery), connect to the pipeline stream to receive build phase events.
+    if (pipelineJobId) {
+      const existing = (window as unknown as Record<string, unknown>).__resumeEventSource as EventSource | undefined;
+      if (!existing || existing.readyState === EventSource.CLOSED) {
+        // Set loading state so WorkshopApp transitions to build phase
+        setLoading("pipeline");
+
+        const evtSource = new EventSource(`/api/pipeline/${pipelineJobId}/stream`);
+        const handleEvent = (e: MessageEvent) => {
+          try {
+            const event = JSON.parse(e.data);
+            const store = useAppStore.getState();
+
+            switch (event.type) {
+              case "stage-start":
+                store.setCurrentStage(event.stage as PipelineStage);
+                store.updatePipelineStage(event.stage as PipelineStage, { status: "running", progress: 0, message: "" });
+                break;
+              case "stage-complete":
+                store.updatePipelineStage(event.stage as PipelineStage, { status: "success" as const, progress: 100 });
+                break;
+              case "scene-generating":
+                store.setSceneState(event.sceneId as string, { status: "generating" });
+                break;
+              case "scene-ready":
+                store.setSceneState(event.sceneId as string, {
+                  status: "ready",
+                  clipUrl: event.clipUrl as string,
+                  durationSeconds: event.durationSeconds as number,
+                  inputTokens: (event.tokenUsage as { inputTokens?: number } | undefined)?.inputTokens,
+                  outputTokens: (event.tokenUsage as { outputTokens?: number } | undefined)?.outputTokens,
+                  cachedTokens: (event.tokenUsage as { cachedTokens?: number } | undefined)?.cachedTokens,
+                  estimatedCostUSD: (event.tokenUsage as { estimatedCostUSD?: number } | undefined)?.estimatedCostUSD,
+                });
+                store.addLiveClip({ sceneId: event.sceneId as string, clipUrl: event.clipUrl as string });
+                break;
+              case "scene-failed":
+                store.setSceneState(event.sceneId as string, {
+                  status: "failed",
+                  error: event.error as string,
+                  inputTokens: (event.tokenUsage as { inputTokens?: number } | undefined)?.inputTokens,
+                  outputTokens: (event.tokenUsage as { outputTokens?: number } | undefined)?.outputTokens,
+                  cachedTokens: (event.tokenUsage as { cachedTokens?: number } | undefined)?.cachedTokens,
+                  estimatedCostUSD: (event.tokenUsage as { estimatedCostUSD?: number } | undefined)?.estimatedCostUSD,
+                });
+                break;
+              case "pipeline-complete": {
+                const manifest = event.manifest as Record<string, unknown>;
+                const artifact = manifest.finalArtifact as Record<string, unknown> | undefined;
+                if (artifact && artifact.path) {
+                  store.setVideoUrl(`/api/video/${manifest.jobId}`);
+                }
+                store.setLoading(null);
+                evtSource.close();
+                break;
+              }
+              case "pipeline-error":
+                store.setPipelineError(event.error as string);
+                store.setLoading(null);
+                evtSource.close();
+                break;
+              case "pipeline-awaiting-confirmation": {
+                store.setPipelineAwaitingConfirmation(true);
+                const { autoContinue } = useAppStore.getState();
+                if (autoContinue && (event.failedCount as number) === 0) {
+                  fetch(`/api/pipeline/${event.jobId as string}/control`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ action: "continue" }),
+                  });
+                }
+                break;
+              }
+            }
+          } catch {}
+        };
+
+        evtSource.onmessage = handleEvent;
+        evtSource.onerror = () => {
+          evtSource.close();
+        };
+        (window as unknown as Record<string, unknown>).__resumeEventSource = evtSource;
+      }
+    }
+  }, [approvePlan, pipelineJobId, setLoading]);
 
   if (!livePlan) return null;
 
@@ -165,12 +306,15 @@ function ApprovalScreen() {
         <div className="rise-in flex flex-col gap-3" style={{ animationDelay: "120ms" }}>
           <button
             type="button"
-            onClick={() => void approvePlan()}
+            onClick={() => void handleApprove()}
             disabled={approvalLoading}
-            className="text-link self-center text-xl disabled:opacity-50 disabled:cursor-wait"
+            className={`w-full rounded-lg px-3 py-2 font-heading text-sm font-semibold transition-colors ${
+              approvalLoading
+                ? "bg-[color:var(--rule)]/30 text-[color:var(--umber)]/40 cursor-not-allowed"
+                : "bg-[color:var(--sunflower-deep)] text-white hover:bg-[color:var(--sunflower-deep)]/90"
+            }`}
           >
             {approvalLoading ? "Starting…" : "Approve & start building"}
-            {!approvalLoading && <span aria-hidden="true" className="text-link-arrow"> →</span>}
           </button>
           {approvalError && (
             <p className="font-heading text-sm text-red-600">{approvalError}</p>
@@ -269,6 +413,7 @@ function ApprovalSceneCard({
           editable={editing}
           multiline
           onChange={setEditDesc}
+          useMathText
         />
         {/* Math content */}
         {(scene.mathContent || editing) && (
@@ -278,6 +423,7 @@ function ApprovalSceneCard({
             editable={editing}
             onChange={setEditMath}
             mono
+            useMathText
           />
         )}
         {/* Narration */}
@@ -292,6 +438,7 @@ function ApprovalSceneCard({
               onChange={setEditNarr}
               italic
               quotes
+              useMathText
             />
           </div>
         )}
@@ -339,6 +486,7 @@ function ViewEditField({
   mono,
   italic,
   quotes,
+  useMathText: useMathTextProp,
 }: {
   label: string | null;
   value: string;
@@ -348,6 +496,7 @@ function ViewEditField({
   mono?: boolean;
   italic?: boolean;
   quotes?: boolean;
+  useMathText?: boolean;
 }) {
   const fontStyle = mono
     ? "font-mono text-xs"
@@ -368,7 +517,7 @@ function ViewEditField({
           className={`${fontStyle} w-full resize-none rounded-md border-0 bg-[oklch(0.98_0.02_85)] px-2 py-1 outline-none ring-1 ring-[color:var(--rule)]/40 transition-shadow focus-visible:ring-2 focus-visible:ring-[color:var(--sunflower-deep)]/60`}
         />
       ) : (
-        <p className={fontStyle}>{quotes ? `"${value}"` : value}</p>
+        <p className={fontStyle}>{useMathTextProp ? <MathText>{value}</MathText> : (quotes ? `"${value}"` : value)}</p>
       )}
     </div>
   );
@@ -381,11 +530,11 @@ function ViewEditField({
 function BuildScreen() {
   const livePlan = useAppStore((s) => s.livePlan);
   const sceneStates = useAppStore((s) => s.sceneStates);
-  const isPaused = useAppStore((s) => s.isPaused);
   const pipelineJobId = useAppStore((s) => s.pipelineJobId);
-  const abortGeneration = useAppStore((s) => s.abortGeneration);
-  const setPaused = useAppStore((s) => s.setPaused);
   const regenerateScene = useAppStore((s) => s.regenerateScene);
+  const autoContinue = useAppStore((s) => s.autoContinue);
+  const setAutoContinue = useAppStore((s) => s.setAutoContinue);
+  const pipelineAwaitingConfirmation = useAppStore((s) => s.pipelineAwaitingConfirmation);
 
   const [featured, setFeatured] = useState(0);
 
@@ -394,9 +543,12 @@ function BuildScreen() {
   const scenes = livePlan.sceneBreakdown;
   const total = scenes.length;
   const readyCount = Object.values(sceneStates).filter((s) => s.status === "ready").length;
+  const failedCount = Object.values(sceneStates).filter((s) => s.status === "failed").length;
+  const generatingCount = Object.values(sceneStates).filter((s) => s.status === "generating" || s.status === "regenerating").length;
   const activeScene = scenes.find((s) => sceneStates[s.sceneId]?.status === "generating" || sceneStates[s.sceneId]?.status === "regenerating");
   const allReady = readyCount === total;
   const pct = total === 0 ? 0 : Math.round((readyCount / total) * 100);
+  const canContinue = generatingCount === 0 && (failedCount / total) <= 0.20;
 
   const featuredScene = scenes[featured];
   const featuredState = sceneStates[featuredScene?.sceneId]?.status ?? "pending";
@@ -406,27 +558,38 @@ function BuildScreen() {
   const prev = () => setFeatured((f) => (f - 1 + total) % total);
   const next = () => setFeatured((f) => (f + 1) % total);
 
-  const onPause = async () => {
+  const onToggleAutoContinue = async (value: boolean) => {
+    setAutoContinue(value);
+    if (pipelineJobId) {
+      try {
+        await fetch(`/api/pipeline/${pipelineJobId}/control`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "set-auto-continue", value }),
+        });
+      } catch { /* silent */ }
+    }
+  };
+
+  const onContinue = async () => {
     if (!pipelineJobId) return;
     try {
       await fetch(`/api/pipeline/${pipelineJobId}/control`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "pause" }),
+        body: JSON.stringify({ action: "continue" }),
       });
-      setPaused(true);
     } catch { /* silent */ }
   };
 
-  const onResume = async () => {
+  const onAbort = async () => {
     if (!pipelineJobId) return;
     try {
       await fetch(`/api/pipeline/${pipelineJobId}/control`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "resume" }),
+        body: JSON.stringify({ action: "abort" }),
       });
-      setPaused(false);
     } catch { /* silent */ }
   };
 
@@ -447,11 +610,13 @@ function BuildScreen() {
         <div className="rise-in flex flex-col gap-2" style={{ animationDelay: "60ms" }}>
           <div className="flex items-baseline justify-between">
             <p className="font-heading text-xs italic text-[color:var(--umber)]/60">
-              {allReady
-                ? "Every scene is ready!"
-                : activeScene
-                  ? `Drafting scene ${scenes.indexOf(activeScene) + 1}…`
-                  : "Warming up the ink."}
+              {pipelineAwaitingConfirmation && failedCount > 0
+                ? "Some scenes need another pass. Review the failures, then continue."
+                : allReady
+                  ? "Every scene is ready!"
+                  : activeScene
+                    ? `Drafting scene ${scenes.indexOf(activeScene) + 1}…`
+                    : "Warming up the ink."}
             </p>
             <span className="font-heading text-[11px] italic text-[color:var(--umber)]/45">{readyCount}/{total}</span>
           </div>
@@ -463,35 +628,66 @@ function BuildScreen() {
         <div className="flex-1" />
 
         {/* Controls */}
-        {abortGeneration && (
-          <>
-            <div className="flex gap-2">
-              {!isPaused ? (
-                <button
-                  onClick={onPause}
-                  className="flex-1 rounded-lg border border-[color:var(--rule)]/50 px-2 py-1.5 font-heading text-xs text-[color:var(--umber)] transition-colors hover:bg-[color:var(--paper-warm)]"
-                >
-                  ⏸ Pause
-                </button>
-              ) : (
-                <button
-                  onClick={onResume}
-                  className="flex-1 rounded-lg border border-[color:var(--rule)]/50 px-2 py-1.5 font-heading text-xs text-[color:var(--umber)] transition-colors hover:bg-[color:var(--paper-warm)]"
-                >
-                  ▶ Resume
-                </button>
-              )}
-              <button
-                onClick={() => abortGeneration()}
-                className="flex-1 rounded-lg border border-[color:var(--rule)]/50 px-2 py-1.5 font-heading text-xs text-[color:var(--umber)]/60 transition-colors hover:bg-[oklch(0.96_0.06_55/0.3)] hover:text-[color:var(--accent)]"
+        {pipelineJobId && (
+          <div className="rise-in flex flex-col gap-3" style={{ animationDelay: "120ms" }}>
+            {/* Auto-continue toggle */}
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={() => void onToggleAutoContinue(!autoContinue)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  void onToggleAutoContinue(!autoContinue);
+                }
+              }}
+              className={`inline-flex cursor-pointer items-center gap-2 self-start rounded-full border px-3 py-1.5 font-heading text-xs font-semibold transition-all select-none ${autoContinue ? "border-[oklch(0.65_0.18_75/0.6)] bg-[oklch(0.94_0.12_82/0.55)] text-[color:var(--umber)] shadow-[0_2px_8px_-2px_oklch(0.7_0.18_75/0.3)]" : "border-[color:var(--rule)]/50 bg-[color:var(--paper)] text-[color:var(--umber)]/50 hover:text-[color:var(--umber)]/80"}`}
+            >
+              <span
+                className={`inline-block size-3.5 rounded-full transition-colors ${autoContinue ? "bg-[color:var(--sunflower-deep)]" : "bg-[color:var(--rule)]/60"}`}
               >
-                ⏹ Stop
-              </button>
+                {autoContinue && (
+                  <svg viewBox="0 0 14 14" className="size-3.5 p-0.5 text-[oklch(0.22_0.07_55)]">
+                    <polyline
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      points="3 7 6 10 11 4"
+                    />
+                  </svg>
+                )}
+              </span>
+              Auto-continue
             </div>
-          </>
+
+            {/* Continue button — only shown when awaiting confirmation */}
+            {pipelineAwaitingConfirmation && (
+              <button
+                onClick={() => void onContinue()}
+                disabled={!canContinue}
+                className={`w-full rounded-lg px-3 py-2 font-heading text-sm font-semibold transition-colors ${
+                  canContinue
+                    ? "bg-[color:var(--sunflower-deep)] text-white hover:bg-[color:var(--sunflower-deep)]/90"
+                    : "bg-[color:var(--rule)]/30 text-[color:var(--umber)]/40 cursor-not-allowed"
+                }`}
+              >
+                {failedCount > 0
+                  ? `Continue with ${total - failedCount}/${total} scenes`
+                  : "Continue"}
+              </button>
+            )}
+
+            {/* Abort button */}
+            <button
+              onClick={() => void onAbort()}
+              className="w-full rounded-lg border border-[color:var(--rule)]/50 px-3 py-2 font-heading text-xs text-[color:var(--umber)]/60 transition-colors hover:bg-[oklch(0.96_0.06_55/0.3)] hover:text-[color:var(--accent)]"
+            >
+              Abort
+            </button>
+          </div>
         )}
 
-        {allReady && abortGeneration && (
+        {allReady && pipelineJobId && !pipelineAwaitingConfirmation && (
           <div className="font-heading text-xs italic text-[color:var(--sunflower-deep)] text-center">
             ✦ All scenes complete — finalizing video…
           </div>
@@ -537,16 +733,19 @@ function BuildScreen() {
           </div>
 
           {/* Featured content */}
-          <div className="flex-1 min-h-0">
+          <div className="flex-1 min-h-0 overflow-hidden">
             {featuredState === "ready" && featuredClip ? (
-              <div className="h-full">
-                <div className="rounded-[14px] bg-gradient-to-br from-[color:var(--sunflower-deep)] via-[color:var(--accent)] to-[color:var(--sunflower)] p-[2px]">
-                  <div className="overflow-hidden rounded-[12px] bg-[color:var(--paper)]">
+              <div className="flex h-full w-full items-center justify-center overflow-hidden">
+                <div
+                  className="max-w-full max-h-full rounded-[14px] bg-gradient-to-br from-[color:var(--sunflower-deep)] via-[color:var(--accent)] to-[color:var(--sunflower)] p-[2px]"
+                  style={{ aspectRatio: "16/9" }}
+                >
+                  <div className="h-full w-full overflow-hidden rounded-[12px] bg-[color:var(--paper)]">
                     <video
                       src={featuredClip}
                       controls
                       preload="metadata"
-                      className="h-full w-full object-contain"
+                      className="block h-full w-full"
                     />
                   </div>
                 </div>
@@ -560,6 +759,18 @@ function BuildScreen() {
                   </p>
                   <p className="mt-1 font-heading text-xs italic text-[color:var(--umber)]/55">
                     Writing Manim code, validating, rendering. Usually ~10–20s.
+                  </p>
+                </div>
+              </div>
+            ) : featuredState === "failed" ? (
+              <div className="flex h-full items-center justify-center rounded-[14px] border-2 border-dashed border-[color:var(--accent)]/50 bg-[oklch(0.96_0.06_55/0.3)]">
+                <div className="text-center">
+                  <div className="text-5xl mb-3">⚠️</div>
+                  <p className="font-heading text-lg font-semibold italic text-[color:var(--accent)]">
+                    This scene didn&apos;t finish.
+                  </p>
+                  <p className="mt-1 font-heading text-xs italic text-[color:var(--umber)]/55 max-w-xs mx-auto">
+                    {sceneStates[featuredScene?.sceneId]?.error ?? "Something went wrong while rendering."}
                   </p>
                 </div>
               </div>
@@ -577,14 +788,15 @@ function BuildScreen() {
             )}
           </div>
 
-          {/* Redo link */}
-          {featuredState === "ready" && (
-            <div className="flex justify-end">
+          {/* Redo link + token cost */}
+          {(featuredState === "ready" || featuredState === "failed") && (
+            <div className="flex items-center justify-between">
+              <TokenCostCaption state={sceneStates[featuredScene.sceneId]!} />
               <button
                 onClick={() => regenerateScene(featuredScene.sceneId)}
                 className="font-heading text-xs italic text-[color:var(--umber)]/50 transition-colors hover:text-[color:var(--accent)]"
               >
-                ↻ Redo this scene
+                {featuredState === "failed" ? "↻ Try again" : "↻ Redo this scene"}
               </button>
             </div>
           )}
@@ -614,18 +826,28 @@ function BuildScreen() {
                       ? "linear-gradient(135deg, oklch(0.9 0.16 85 / 0.6), oklch(0.75 0.19 45 / 0.3))"
                       : st === "generating" || st === "regenerating"
                         ? "oklch(0.94 0.06 82 / 0.6)"
-                        : "oklch(0.94 0.04 85 / 0.5)",
+                        : st === "failed"
+                          ? "oklch(0.96 0.06 55 / 0.35)"
+                          : "oklch(0.94 0.04 85 / 0.5)",
                   }}>
                     {st === "ready" ? (
                       <>
                         <div className="flex flex-col items-center justify-center h-full">
                           <span className="text-lg">🎬</span>
                           {dur && <span className="font-heading text-[9px] italic text-[color:var(--umber)]/60">{dur.toFixed(1)}s</span>}
+                          <TokenCostCaption state={sceneStates[sc.sceneId]!} />
                         </div>
                       </>
                     ) : st === "generating" || st === "regenerating" ? (
                       <div className="flex items-center justify-center h-full">
                         <span className="sway text-base">✏️</span>
+                      </div>
+                    ) : st === "failed" ? (
+                      <div className="flex flex-col items-center justify-center h-full">
+                        <span className="font-heading text-xl font-semibold italic text-[color:var(--accent)]/60">
+                          {String(i + 1).padStart(2, "0")}
+                        </span>
+                        <TokenCostCaption state={sceneStates[sc.sceneId]!} />
                       </div>
                     ) : (
                       <div className="flex items-center justify-center h-full">
@@ -638,6 +860,7 @@ function BuildScreen() {
                     <div className={`absolute top-1 right-1 size-1.5 rounded-full ${
                       st === "ready" ? "bg-[oklch(0.62_0.194_149)]"
                         : st === "generating" || st === "regenerating" ? "bg-[color:var(--sunflower-deep)] soft-pulse"
+                        : st === "failed" ? "bg-[color:var(--accent)]"
                         : "bg-[color:var(--rule)]/50"
                     }`} />
                     {/* Label */}
@@ -760,7 +983,19 @@ export function WorkshopApp() {
       case "stage-complete":
         store.updatePipelineStage(event.stage as PipelineStage, { status: "success" as const, progress: 100 });
         break;
-      case "plan-ready":
+      case "plan-ready": {
+        const plan = event.plan as Record<string, unknown>;
+        const planOutput = {
+          title: (plan.title as string) ?? "Untitled Lesson",
+          estimatedDuration: (plan.estimatedDuration as number) ?? 30,
+          steps: (plan.steps as Array<{ label: string; narration: string }>) ?? [],
+          sceneBreakdown: (plan.sceneBreakdown as Array<{ sceneId: string; description: string; mathContent: string; estimatedSeconds: number }>) ?? [],
+        };
+        store.setLivePlan(planOutput);
+        store.initSceneStatesFromPlan(planOutput);
+        store.setPlanApprovalPending(false);
+        break;
+      }
       case "plan-awaiting-approval": {
         const plan = event.plan as Record<string, unknown>;
         const planOutput = {
@@ -771,7 +1006,7 @@ export function WorkshopApp() {
         };
         store.setLivePlan(planOutput);
         store.initSceneStatesFromPlan(planOutput);
-        store.setPlanApprovalPending(event.type === "plan-awaiting-approval");
+        store.setPlanApprovalPending(true);
         break;
       }
       case "scene-generating":
@@ -782,17 +1017,28 @@ export function WorkshopApp() {
           status: "ready",
           clipUrl: event.clipUrl as string,
           durationSeconds: event.durationSeconds as number,
+          inputTokens: (event.tokenUsage as { inputTokens?: number } | undefined)?.inputTokens,
+          outputTokens: (event.tokenUsage as { outputTokens?: number } | undefined)?.outputTokens,
+          cachedTokens: (event.tokenUsage as { cachedTokens?: number } | undefined)?.cachedTokens,
+          estimatedCostUSD: (event.tokenUsage as { estimatedCostUSD?: number } | undefined)?.estimatedCostUSD,
         });
         store.addLiveClip({ sceneId: event.sceneId as string, clipUrl: event.clipUrl as string });
         break;
       case "scene-failed":
-        store.setSceneState(event.sceneId as string, { status: "failed", error: event.error as string });
+        store.setSceneState(event.sceneId as string, {
+          status: "failed",
+          error: event.error as string,
+          inputTokens: (event.tokenUsage as { inputTokens?: number } | undefined)?.inputTokens,
+          outputTokens: (event.tokenUsage as { outputTokens?: number } | undefined)?.outputTokens,
+          cachedTokens: (event.tokenUsage as { cachedTokens?: number } | undefined)?.cachedTokens,
+          estimatedCostUSD: (event.tokenUsage as { estimatedCostUSD?: number } | undefined)?.estimatedCostUSD,
+        });
         break;
       case "pipeline-complete": {
         const manifest = event.manifest as Record<string, unknown>;
         const artifact = manifest.finalArtifact as Record<string, unknown> | undefined;
         if (artifact && artifact.path) {
-          store.setVideoUrl(`/api/video/${manifest.jobId}/final.mp4`);
+          store.setVideoUrl(`/api/video/${manifest.jobId}`);
         }
         store.setLoading(null);
         const es = (window as unknown as Record<string, unknown>).__resumeEventSource as EventSource | undefined;
@@ -831,12 +1077,17 @@ export function WorkshopApp() {
 
         let videoUrl: string | null = null;
         if (entry.status === "complete") {
-          videoUrl = `/api/video/${resumeJobId}/final.mp4`;
+          videoUrl = `/api/video/${resumeJobId}`;
         }
 
         let plan: PlanOutput | null = null;
         if (entry.plan) {
           plan = entry.plan as PlanOutput;
+        }
+
+        let sceneStates: SceneStates | undefined;
+        if (entry.sceneStates && typeof entry.sceneStates === "object") {
+          sceneStates = entry.sceneStates as SceneStates;
         }
 
         resumeFromGallery({
@@ -847,10 +1098,19 @@ export function WorkshopApp() {
           currentStage: entry.currentStage ?? manifest?.stages?.find((s: { status: string }) => s.status === "running")?.stage ?? null,
           plan,
           videoUrl,
+          sceneStates,
         });
 
         // Reconnect to live SSE stream for in-progress jobs
-        if (entry.status === "building" || entry.status === "awaiting-approval" || entry.status === "generating") {
+        // For "awaiting-approval", we don't connect here — the pipeline is
+        // paused at the plan stage. After the user approves the plan, the
+        // ApprovalScreen component will establish the SSE connection.
+        // For "paused" status, we also need to connect so the UI can receive
+        // updates when the pipeline is resumed.
+        const needsStream = entry.status === "building" ||
+                           entry.status === "generating" ||
+                           entry.status === "paused";
+        if (needsStream) {
           evtSource = new EventSource(`/api/pipeline/${resumeJobId}/stream`);
           evtSource.onmessage = (e) => {
             try {

@@ -20,9 +20,12 @@ type RegenerateBody = {
   sceneId: string;
   sceneUpdate?: Partial<SceneEntry>;
 };
+type HeartbeatBody = { action: "heartbeat" };
+type ContinueBody = { action: "continue" };
+type SetAutoContinueBody = { action: "set-auto-continue"; value: boolean };
 type LegacyBody = { action: "pause" | "resume" | "abort" };
 
-type ControlBody = LegacyBody | ApprovePlanBody | UpdatePlanBody | RegenerateBody;
+type ControlBody = LegacyBody | ApprovePlanBody | UpdatePlanBody | RegenerateBody | HeartbeatBody | ContinueBody | SetAutoContinueBody;
 
 /* Structural validation — defensively walk the plan shape before accepting it. */
 function isValidPlan(p: unknown): p is PlanOutput {
@@ -96,6 +99,7 @@ export async function POST(
         // check downstream will short-circuit before work continues.
         controller.approvePlan(controller.currentPlan!);
       }
+      if (controller.confirmPipeline) controller.confirmPipeline();
       if (controller.currentSceneAbort) controller.currentSceneAbort.abort();
       return NextResponse.json({ ok: true, status: "aborted" });
     }
@@ -182,11 +186,40 @@ export async function POST(
       return NextResponse.json({ ok: true, status: "regenerate-queued" });
     }
 
+    case "heartbeat": {
+      controller.lastApprovalHeartbeat = Date.now();
+      return NextResponse.json({ ok: true });
+    }
+
+    case "continue": {
+      if (!controller.confirmPipeline) {
+        return NextResponse.json({ ok: false, error: "Pipeline is not awaiting confirmation." }, { status: 409 });
+      }
+      // Safety check: reject if >20% scenes failed
+      const total = controller.currentPlan?.sceneBreakdown.length ?? 1;
+      const failed = controller.currentPlan?.sceneBreakdown.filter((s) =>
+        controller.sceneStates[s.sceneId]?.status === "failed",
+      ).length ?? 0;
+      if (failed / total > 0.20) {
+        return NextResponse.json({ ok: false, error: "Too many scenes failed to continue." }, { status: 409 });
+      }
+      controller.confirmPipeline();
+      return NextResponse.json({ ok: true, status: "continued" });
+    }
+
+    case "set-auto-continue": {
+      if (typeof body.value !== "boolean") {
+        return NextResponse.json({ error: "Expected 'value' boolean." }, { status: 400 });
+      }
+      controller.autoContinue = body.value;
+      return NextResponse.json({ ok: true, autoContinue: body.value });
+    }
+
     default: {
       return NextResponse.json(
         {
           error:
-            "Invalid action. Use pause, resume, abort, approve-plan, update-plan, or regenerate-scene.",
+            "Invalid action. Use pause, resume, abort, approve-plan, update-plan, regenerate-scene, heartbeat, continue, or set-auto-continue.",
         },
         { status: 400 },
       );

@@ -1,0 +1,117 @@
+{
+  "scenes": [
+    {
+      "sceneId": "hook_pizza_ratio_equivalence",
+      "sceneIR": {
+        "metadata": {
+          "sceneId": "hook_pizza_ratio_equivalence",
+          "role": "hook",
+          "visualIntent": "Hook students with two pizza slices that look different but express equivalent ratios.",
+          "densityTarget": 0.39,
+          "baseClass": "Scene"
+        },
+        "layout": {
+          "safeArea": {
+            "xMin": -6.5,
+            "xMax": 6.5,
+            "yMin": -3.5,
+            "yMax": 3.5
+          },
+          "zones": [
+            { "id": "title", "x": 0, "y": 2.8, "width": 11, "height": 1.0, "note": "Title lane" },
+            { "id": "left", "x": -3.0, "y": 0.7, "width": 4.0, "height": 3.6, "note": "Left comparison" },
+            { "id": "right", "x": 3.0, "y": 0.7, "width": 4.0, "height": 3.6, "note": "Right comparison" },
+            { "id": "center", "x": 0, "y": 0.5, "width": 2.0, "height": 2.5, "note": "Arrow lane" },
+            { "id": "footer", "x": 0, "y": -2.7, "width": 11, "height": 1.2, "note": "Question lane" }
+          ],
+          "continuitySlots": ["pizza_left", "pizza_right"]
+        },
+        "objects": [
+          {
+            "id": "title",
+            "kind": "text",
+            "role": "scene_title",
+            "anchor": { "zone": "title", "align": "center" },
+            "props": { "text": "Do These Ratios Match?", "fontSize": 52 },
+            "relatedTo": [],
+            "zIndex": 4
+          },
+          {
+            "id": "pizza_left",
+            "kind": "compound.pizza_ratio",
+            "role": "left_ratio_model",
+            "anchor": { "zone": "left", "align": "center" },
+            "props": { "numerator": 3, "denominator": 5, "radius": 1.15, "labelScale": 1.05 },
+            "relatedTo": ["pizza_right"],
+            "zIndex": 2
+          },
+          {
+            "id": "pizza_right",
+            "kind": "compound.pizza_ratio",
+            "role": "right_ratio_model",
+            "anchor": { "zone": "right", "align": "center" },
+            "props": { "numerator": 6, "denominator": 10, "radius": 1.15, "labelScale": 1.05 },
+            "relatedTo": ["pizza_left"],
+            "zIndex": 2
+          },
+          {
+            "id": "ratio_arrow",
+            "kind": "arrow",
+            "role": "comparison_arrow",
+            "anchor": { "zone": "center", "align": "center" },
+            "props": { "start": [-0.8, 0, 0], "end": [0.8, 0, 0], "color": "#FF8C42", "buff": 0.05 },
+            "relatedTo": ["pizza_left", "pizza_right"],
+            "zIndex": 3
+          },
+          {
+            "id": "prompt",
+            "kind": "compound.callout_card",
+            "role": "question_prompt",
+            "anchor": { "zone": "footer", "align": "center" },
+            "props": {
+              "title": "Predict First",
+              "body": "Are 3/5 and 6/10 equivalent?",
+              "width": 6.8,
+              "height": 1.7,
+              "fillColor": "#E8D5A3"
+            },
+            "relatedTo": [],
+            "zIndex": 5
+          }
+        ],
+        "beats": [
+          {
+            "id": "open_with_question",
+            "narration": "Two pizzas look different. Are the shaded parts actually the same ratio?",
+            "actions": [
+              { "type": "show", "targets": ["title"], "animation": "write", "runTime": 0.9 },
+              { "type": "show", "targets": ["pizza_left", "pizza_right"], "animation": "fade_in", "runTime": 1.0, "stagger": 0.15 }
+            ],
+            "holdSeconds": 0.5
+          },
+          {
+            "id": "comparison_focus",
+            "narration": "Look closely at the shaded fraction in each circle.",
+            "actions": [
+              { "type": "show", "targets": ["ratio_arrow"], "animation": "create", "runTime": 0.5 },
+              { "type": "emphasize", "targets": ["pizza_left", "pizza_right"], "animation": "circumscribe", "runTime": 0.8 }
+            ],
+            "holdSeconds": 0.2
+          },
+          {
+            "id": "student_prompt_pause",
+            "narration": "Pause and predict before we reveal the answer.",
+            "actions": [
+              { "type": "show", "targets": ["prompt"], "animation": "fade_in", "runTime": 0.6 },
+              { "type": "wait", "seconds": 3.0 }
+            ],
+            "holdSeconds": 0.2
+          }
+        ],
+        "continuity": {
+          "keep": ["pizza_left", "pizza_right", "prompt"]
+        }
+      }
+    }
+  ]
+}

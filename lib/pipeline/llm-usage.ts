@@ -1,7 +1,7 @@
 import { LLM_PRICING } from "./llm-pricing";
 
 export type LLMUsage = {
-  provider: "anthropic" | "openai" | "deepseek";
+  provider: "anthropic" | "openai" | "deepseek" | "kimi";
   model: string;
   inputTokens: number;
   outputTokens: number;

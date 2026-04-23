@@ -15,9 +15,11 @@ type GalleryEntry = {
   sceneCount: number;
   sceneBreakdown: { sceneId: string; description: string; mathContent: string; estimatedSeconds: number }[];
   videoUrl: string;
+  thumbnailUrl?: string;
   createdAt: number;
   status: GalleryEntryStatus;
   currentStage: string | null;
+  failedSceneCount?: number;
 };
 
 function formatDuration(seconds: number): string {
@@ -60,10 +62,12 @@ function AnimationCard({
   entry,
   onClick,
   delay,
+  isViewed,
 }: {
   entry: GalleryEntry;
   onClick: (entry: GalleryEntry) => void;
   delay: number;
+  isViewed: boolean;
 }) {
   const isDone = entry.status === "complete";
   const isAwaiting = entry.status === "awaiting-approval";
@@ -72,40 +76,48 @@ function AnimationCard({
 
   return (
     <div
-      className="rise-in overflow-hidden rounded-xl border border-[oklch(1_0_0/0.08)] bg-[oklch(0.2_0.03_62)] transition-all duration-250 hover:-translate-y-0.5 hover:border-[oklch(1_0_0/0.16)] hover:shadow-[0_16px_40px_-12px_oklch(0_0_0/0.5)]"
+      className="rise-in flex flex-col h-full overflow-hidden rounded-xl border border-[oklch(1_0_0/0.08)] bg-[oklch(0.2_0.03_62)] transition-all duration-250 hover:-translate-y-0.5 hover:border-[oklch(1_0_0/0.16)] hover:shadow-[0_16px_40px_-12px_oklch(0_0_0/0.5)]"
       style={{ animationDelay: `${delay}ms` }}
       onClick={() => onClick(entry)}
     >
       {/* Thumbnail / status area */}
       <div className="group relative aspect-video overflow-hidden">
-        {isDone && entry.videoUrl ? (
+        {isDone && (entry.thumbnailUrl || entry.videoUrl) ? (
           <>
-            <video
-              src={entry.videoUrl}
-              preload="metadata"
-              muted
-              playsInline
-              className="h-full w-full object-cover"
-              onMouseOver={(e) => (e.target as HTMLVideoElement).play()?.catch(() => {})}
-              onMouseOut={(e) => {
-                const v = e.target as HTMLVideoElement;
-                v.pause();
-                v.currentTime = 0;
-              }}
-            />
+            {entry.thumbnailUrl ? (
+              <img
+                src={entry.thumbnailUrl}
+                alt={entry.title}
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <video
+                src={entry.videoUrl}
+                preload="metadata"
+                muted
+                playsInline
+                className="h-full w-full object-cover"
+                onMouseOver={(e) => (e.target as HTMLVideoElement).play()?.catch(() => {})}
+                onMouseOut={(e) => {
+                  const v = e.target as HTMLVideoElement;
+                  v.pause();
+                  v.currentTime = 0;
+                }}
+              />
+            )}
             <div className="absolute inset-0 flex items-center justify-center bg-[oklch(0.08_0.02_55/0.45)] opacity-0 transition-opacity group-hover:opacity-100">
               <div className="flex size-10 items-center justify-center rounded-full bg-[oklch(1_0_0/0.92)] pl-[3px] text-sm opacity-0 transition-all duration-300 [transition-timing-function:cubic-bezier(0.16,1,0.3,1)] group-hover:scale-100 group-hover:opacity-100" style={{ transform: "scale(0.7)" }}>
                 ▶
               </div>
             </div>
-            <div className="absolute bottom-1.5 right-2 rounded bg-[oklch(0.08_0.02_55/0.8)] px-1.5 py-0.5 font-sans text-[10px] font-medium tracking-wide text-[oklch(0.94_0.02_85)]">
+            <div className="absolute bottom-1.5 right-2 rounded bg-[oklch(0.08_0.02_55/0.8)] px-1.5 py-0.5 font-sans text-[10px] font-medium tracking-wide text-[oklch(0.94_0.02_85/0.8)]">
               {formatDuration(entry.durationSeconds)}
             </div>
           </>
         ) : isAwaiting ? (
           <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-[oklch(0.15_0.03_60)]">
             <span className="text-3xl">✎</span>
-            <span className="font-heading text-sm italic text-[oklch(0.94_0.02_85)]">Plan ready — review & approve</span>
+            <span className="font-heading text-sm italic text-[oklch(0.94_0.02_85)]">Plan ready — review &amp; approve</span>
             <span className="inline-flex items-center gap-1 rounded-full bg-[color:var(--sunflower-deep)]/20 px-3 py-1 font-heading text-[11px] font-semibold text-[color:var(--sunflower-deep)]">
               ← Resume
             </span>
@@ -129,20 +141,25 @@ function AnimationCard({
       </div>
 
       {/* Body */}
-      <div className="flex flex-col gap-1.5 p-3.5">
+      <div className="grid grid-rows-[auto_1fr_auto] gap-1.5 p-3.5 flex-1">
         <div className="flex items-start justify-between gap-2">
-          <div className="font-heading text-sm font-medium italic tracking-tight text-[oklch(0.94_0.02_85)] leading-tight">
+          <div className="font-heading text-sm font-medium italic tracking-tight text-[oklch(0.94_0.02_85)] leading-tight line-clamp-2 min-h-[2lh]">
             {entry.title}
           </div>
         </div>
-        <div className="font-sans text-[11px] leading-snug text-[oklch(0.6_0.04_75)]">
-          {entry.conceptText.length > 100
-            ? entry.conceptText.slice(0, 100) + "…"
-            : entry.conceptText}
+        <div className="h-px w-full bg-[oklch(1_0_0/0.08)] my-0.5"></div>
+        <div className="font-sans text-[11px] leading-snug text-[oklch(0.6_0.04_75)] line-clamp-2 min-h-[2lh]">
+          {entry.conceptText}
         </div>
-        <div className="flex items-center gap-2">
-          {statusBadge(entry.status, entry.currentStage)}
-          <span className="font-sans text-[10px] text-[oklch(0.42_0.03_70)]">
+        <div className="flex flex-nowrap items-center gap-2">
+          {!(isDone && isViewed) && statusBadge(entry.status, entry.currentStage)}
+          {entry.status === "building" && entry.failedSceneCount && entry.failedSceneCount > 0 && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-[oklch(0.96_0.06_55/0.35)] px-2 py-0.5 font-heading text-[10px] font-semibold text-[color:var(--accent)]">
+              <span className="block size-1.5 rounded-full bg-[color:var(--accent)]" />
+              {entry.failedSceneCount} {entry.failedSceneCount === 1 ? "scene" : "scenes"} need attention
+            </span>
+          )}
+          <span className="min-w-0 truncate font-sans text-[10px] text-[oklch(0.42_0.03_70)]">
             {entry.sceneCount > 0 ? `${entry.sceneCount} ${entry.sceneCount === 1 ? "scene" : "scenes"}` : ""} · {formatDate(entry.createdAt)}
           </span>
         </div>
@@ -158,12 +175,38 @@ function AnimationCard({
 function Modal({
   entry,
   onClose,
+  onDeleted,
 }: {
   entry: GalleryEntry | null;
   onClose: () => void;
+  onDeleted: () => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const router = useRouter();
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDelete = async () => {
+    if (!entry) return;
+    if (!confirmDelete) {
+      setConfirmDelete(true);
+      return;
+    }
+    setDeleting(true);
+    try {
+      await fetch("/api/gallery", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jobId: entry.jobId }),
+      });
+      onClose();
+      onDeleted();
+    } catch {
+      // Silently fail — the entry may already be gone
+      onClose();
+      onDeleted();
+    }
+  };
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -255,7 +298,7 @@ function Modal({
             </div>
           )}
 
-          <div className="flex flex-wrap gap-2.5 pt-1">
+          <div className="flex flex-wrap items-center gap-2.5 pt-1">
             {canResume && (
               <button
                 onClick={() => {
@@ -275,6 +318,32 @@ function Modal({
                 ↓ Download MP4
               </a>
             )}
+            <div className="flex-1" />
+            {confirmDelete ? (
+              <div className="flex items-center gap-2">
+                <span className="font-sans text-xs text-[oklch(0.65_0.2_25)]">Delete this animation?</span>
+                <button
+                  onClick={handleDelete}
+                  disabled={deleting}
+                  className="rounded-full bg-[oklch(0.96_0.06_55/0.2)] px-3.5 py-1.5 font-heading text-[11px] font-semibold uppercase tracking-[0.12em] text-[oklch(0.65_0.2_25)] transition-colors hover:bg-[oklch(0.96_0.06_55/0.35)] disabled:opacity-50"
+                >
+                  {deleting ? "Deleting…" : "Yes, delete"}
+                </button>
+                <button
+                  onClick={() => setConfirmDelete(false)}
+                  className="rounded-full border border-[oklch(1_0_0/0.08)] bg-transparent px-3.5 py-1.5 font-heading text-[11px] uppercase tracking-[0.12em] text-[oklch(0.42_0.03_70)] transition-colors hover:border-[oklch(1_0_0/0.16)]"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setConfirmDelete(true)}
+                className="rounded-full border border-[oklch(1_0_0/0.06)] bg-transparent px-3.5 py-1.5 font-heading text-[10px] uppercase tracking-[0.12em] text-[oklch(0.35_0.02_70)] transition-colors hover:border-[oklch(0.65_0.2_25)] hover:text-[oklch(0.65_0.2_25)]"
+              >
+                Delete
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -292,6 +361,28 @@ export default function AnimationsPage() {
   const [search, setSearch] = useState("");
   const [mode, setMode] = useState<"all" | "lesson" | "viz">("all");
   const [modal, setModal] = useState<GalleryEntry | null>(null);
+  const [viewedIds, setViewedIds] = useState<Set<string>>(() => {
+    try {
+      const raw = localStorage.getItem("math-in-motion:viewed-entries");
+      return new Set<string>(raw ? JSON.parse(raw) : []);
+    } catch {
+      return new Set<string>();
+    }
+  });
+
+  const markViewed = useCallback((jobId: string) => {
+    setViewedIds((prev) => {
+      if (prev.has(jobId)) return prev;
+      const next = new Set(prev);
+      next.add(jobId);
+      try {
+        localStorage.setItem("math-in-motion:viewed-entries", JSON.stringify(Array.from(next)));
+      } catch {
+        // Ignore storage errors
+      }
+      return next;
+    });
+  }, []);
 
   const fetchGallery = useCallback(async () => {
     try {
@@ -329,13 +420,14 @@ export default function AnimationsPage() {
   }, [entries, search, mode]);
 
   const handleSelect = useCallback((entry: GalleryEntry) => {
-    if (entry.status === "complete") {
-      setModal(entry);
-    } else {
-      // For in-progress entries, navigate to workshop with jobId
+    const inProgress = entry.status === "generating" || entry.status === "awaiting-approval" || entry.status === "building";
+    if (inProgress) {
       window.location.href = `/workshop?jobId=${entry.jobId}`;
+    } else {
+      markViewed(entry.jobId);
+      setModal(entry);
     }
-  }, []);
+  }, [markViewed]);
 
   // Sort: in-progress first, then by date
   const sorted = useMemo(() => {
@@ -415,13 +507,14 @@ export default function AnimationsPage() {
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3.5">
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-3.5">
             {sorted.map((entry, i) => (
               <AnimationCard
                 key={entry.jobId}
                 entry={entry}
                 onClick={handleSelect}
                 delay={i * 40}
+                isViewed={viewedIds.has(entry.jobId)}
               />
             ))}
           </div>
@@ -429,7 +522,7 @@ export default function AnimationsPage() {
       </div>
 
       {/* Modal */}
-      {modal && <Modal entry={modal} onClose={() => setModal(null)} />}
+      {modal && <Modal entry={modal} onClose={() => setModal(null)} onDeleted={fetchGallery} />}
     </div>
   );
 }

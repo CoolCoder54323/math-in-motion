@@ -29,5 +29,17 @@ export const LLM_PRICING = {
       cachedInput: 0.028,
       output: 0.42,
     },
+    "deepseek-reasoner": {
+      input: 0.55,
+      cachedInput: 0.055,
+      output: 2.19,
+    },
+  },
+  kimi: {
+    "kimi-k2.6": {
+      input: 2.0,
+      cachedInput: 0.2,
+      output: 8.0,
+    },
   },
 } as const;

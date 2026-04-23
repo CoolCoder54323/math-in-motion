@@ -22,7 +22,9 @@ type Body = {
   options?: {
     quality?: "l" | "m" | "h";
     skipPostProcess?: boolean;
-    provider?: "anthropic" | "openai" | "deepseek";
+    provider?: "anthropic" | "openai" | "deepseek" | "kimi";
+    model?: string;
+    assets?: string[];
   };
 };
 
@@ -61,6 +63,8 @@ export async function POST(request: Request) {
     options: body.options,
   };
 
+  const abortCtrl = new AbortController();
+
   const encoder = new TextEncoder();
 
   // The pipeline runs independently — client disconnect does NOT abort it.
@@ -98,7 +102,7 @@ export async function POST(request: Request) {
       // Run the pipeline — runs to completion regardless of client connection.
       // The onEvent callback sends SSE events to the connected client.
       // If the client disconnects, send() silently fails and pipeline continues.
-      executePipeline(input, onEvent).catch(() => {
+      executePipeline(input, onEvent, abortCtrl).catch(() => {
         // Unhandled errors are already signaled via pipeline-error event
       });
     },

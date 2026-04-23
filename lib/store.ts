@@ -65,6 +65,10 @@ export type SceneState = {
   clipUrl?: string;
   durationSeconds?: number;
   error?: string;
+  inputTokens?: number;
+  outputTokens?: number;
+  cachedTokens?: number;
+  estimatedCostUSD?: number;
 };
 
 export type SceneStates = Record<string, SceneState>;
@@ -142,8 +146,25 @@ type AppState = {
   /** Last approval error message, if any. */
   approvalError: string | null;
 
+  /** Auto-continue toggle — when true, pipeline skips gates if conditions met. */
+  autoContinue: boolean;
+  /** True when pipeline is blocked at the confirmation gate. */
+  pipelineAwaitingConfirmation: boolean;
+
   // Redo support
   pendingRedo: PendingRedo | null;
+
+  // Model selection
+  selectedProvider: "anthropic" | "openai" | "deepseek" | "kimi";
+  selectedModel: string;
+  setSelectedProvider: (provider: "anthropic" | "openai" | "deepseek" | "kimi") => void;
+  setSelectedModel: (model: string) => void;
+
+  // Assets
+  assets: string[];
+  addAsset: (name: string) => void;
+  removeAsset: (name: string) => void;
+  setAssets: (assets: string[]) => void;
 
   setUploadedImage: (file: File | null) => void;
   setExtracted: (latex: string | null, text: string | null) => void;
@@ -191,6 +212,10 @@ type AppState = {
   setSceneState: (sceneId: string, state: Partial<SceneState>) => void;
   /** Seed every plan scene as pending on plan-ready. */
   initSceneStatesFromPlan: (plan: PlanOutput) => void;
+  /** Set auto-continue toggle. */
+  setAutoContinue: (value: boolean) => void;
+  /** Set awaiting-confirmation flag. */
+  setPipelineAwaitingConfirmation: (value: boolean) => void;
 
   // Redo actions
   setPendingRedo: (redo: PendingRedo | null) => void;
@@ -201,10 +226,11 @@ type AppState = {
     jobId: string;
     conceptText: string;
     mode: PipelineMode;
-    status: "awaiting-approval" | "building" | "complete" | "failed" | "generating";
+    status: "awaiting-approval" | "awaiting-confirmation" | "building" | "complete" | "failed" | "generating" | "paused";
     currentStage: PipelineStage | null;
     plan: PlanOutput | null;
     videoUrl: string | null;
+    sceneStates?: SceneStates;
   }) => void;
 
   resetPipeline: () => void;
@@ -244,7 +270,16 @@ export const useAppStore = create<AppState>((set) => ({
   planApprovalPending: false,
   approvalLoading: false,
   approvalError: null,
+  autoContinue: true,
+  pipelineAwaitingConfirmation: false,
   pendingRedo: null,
+
+  // Model selection defaults
+  selectedProvider: "anthropic",
+  selectedModel: "claude-opus-4-7",
+
+  // Assets
+  assets: [],
 
   setUploadedImage: (file) => set({ uploadedImage: file }),
   setExtracted: (extractedLatex, extractedText) =>
@@ -293,6 +328,23 @@ export const useAppStore = create<AppState>((set) => ({
     set((state) => ({ liveClips: [...state.liveClips, clip] })),
   setValidationReport: (validationReport) => set({ validationReport }),
   setPaused: (isPaused) => set({ isPaused }),
+
+  // Model selection setters
+  setSelectedProvider: (selectedProvider) =>
+    set({ selectedProvider }),
+  setSelectedModel: (selectedModel) =>
+    set({ selectedModel }),
+
+  // Asset setters
+  addAsset: (name) =>
+    set((state) => ({
+      assets: state.assets.includes(name) ? state.assets : [...state.assets, name],
+    })),
+  removeAsset: (name) =>
+    set((state) => ({
+      assets: state.assets.filter((a) => a !== name),
+    })),
+  setAssets: (assets) => set({ assets }),
 
   // ── Workshop actions ───────────────────────────────────────────────
   setPlanApprovalPending: (planApprovalPending) => set({ planApprovalPending }),
@@ -374,11 +426,65 @@ export const useAppStore = create<AppState>((set) => ({
     }
 
     try {
-      await fetch(`/api/pipeline/${pipelineJobId}/control`, {
+      const controlRes = await fetch(`/api/pipeline/${pipelineJobId}/control`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "regenerate-scene", sceneId }),
       });
+
+      if (controlRes.status === 404) {
+        // Pipeline is no longer active — fall back to the standalone retry endpoint.
+        const retryRes = await fetch(`/api/pipeline/${pipelineJobId}/retry-scene`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sceneId }),
+        });
+        const data = (await retryRes.json()) as {
+          ok: boolean;
+          sceneId: string;
+          status: string;
+          clipUrl?: string;
+          durationSeconds?: number;
+          error?: string;
+          tokenUsage?: {
+            inputTokens?: number;
+            outputTokens?: number;
+            cachedTokens?: number;
+            estimatedCostUSD?: number;
+          };
+        };
+        if (data.ok && data.status === "ready") {
+          set((state) => ({
+            sceneStates: {
+              ...state.sceneStates,
+              [sceneId]: {
+                ...(state.sceneStates[sceneId] ?? { status: "pending" }),
+                status: "ready",
+                clipUrl: data.clipUrl,
+                durationSeconds: data.durationSeconds,
+                inputTokens: data.tokenUsage?.inputTokens,
+                outputTokens: data.tokenUsage?.outputTokens,
+                cachedTokens: data.tokenUsage?.cachedTokens,
+                estimatedCostUSD: data.tokenUsage?.estimatedCostUSD,
+                error: undefined,
+              },
+            },
+          }));
+        } else {
+          set((state) => ({
+            sceneStates: {
+              ...state.sceneStates,
+              [sceneId]: {
+                ...(state.sceneStates[sceneId] ?? { status: "pending" }),
+                status: "failed",
+                error: data.error || "Retry failed.",
+              },
+            },
+          }));
+        }
+        return;
+      }
+
       // Optimistic UI: mark as regenerating until the server echoes
       // scene-regenerating / scene-ready.
       set((state) => ({
@@ -396,21 +502,35 @@ export const useAppStore = create<AppState>((set) => ({
     }
   },
 
-  setSceneState: (sceneId, patch) =>
+  setSceneStates: (states: SceneStates) => set({ sceneStates: states }),
+  setSceneState: (sceneId: string, patch: Partial<SceneState>) =>
     set((state) => ({
       sceneStates: {
         ...state.sceneStates,
         [sceneId]: {
-          ...(state.sceneStates[sceneId] ?? { status: "pending" }),
+          ...(state.sceneStates[sceneId] ?? { status: "pending" as SceneStatus }),
           ...patch,
         },
       },
     })),
+  updateSceneState: (sceneId: string, updates: Partial<SceneState>) =>
+    set((state) => ({
+      sceneStates: {
+        ...state.sceneStates,
+        [sceneId]: { ...state.sceneStates[sceneId], ...updates },
+      },
+    })),
+
+  setAutoContinue: (value: boolean) => set({ autoContinue: value }),
+  setPipelineAwaitingConfirmation: (value: boolean) => set({ pipelineAwaitingConfirmation: value }),
 
   initSceneStatesFromPlan: (plan) =>
-    set(() => ({
+    set((state) => ({
       sceneStates: Object.fromEntries(
-        plan.sceneBreakdown.map((s) => [s.sceneId, { status: "pending" as SceneStatus }]),
+        plan.sceneBreakdown.map((s) => [
+          s.sceneId,
+          state.sceneStates[s.sceneId] ?? { status: "pending" as SceneStatus },
+        ]),
       ),
     })),
 
@@ -433,6 +553,7 @@ export const useAppStore = create<AppState>((set) => ({
       currentStage,
       plan,
       videoUrl,
+      sceneStates: persistedSceneStates,
     } = params;
 
     const stages = getInitialStages(mode);
@@ -447,13 +568,32 @@ export const useAppStore = create<AppState>((set) => ({
     const updatedStages = stages.map((s) => {
       const sIdx = stageOrder.indexOf(s.stage);
       if (sIdx < resumeStageIndex) {
-        return { ...s, status: "success" as StageStatus, progress: 100 };
+        return { ...s, status: "success" as StageStatus, progress: 1 };
       }
       if (s.stage === currentStage) {
-        return { ...s, status: "running" as StageStatus, progress: 50 };
+        return { ...s, status: "running" as StageStatus, progress: 0.5 };
       }
       return s;
     });
+
+    // Use persisted scene states if available, otherwise fallback to all-pending
+    const resolvedSceneStates: SceneStates = persistedSceneStates && Object.keys(persistedSceneStates).length > 0
+      ? persistedSceneStates
+      : plan
+        ? Object.fromEntries(
+            plan.sceneBreakdown.map((s) => [s.sceneId, { status: "pending" as SceneStatus }]),
+          )
+        : {};
+
+    // Build live clips from persisted ready scenes
+    const liveClips: LiveClip[] = Object.entries(resolvedSceneStates)
+      .filter(([, state]) => state.status === "ready" && state.clipUrl)
+      .map(([sceneId, state]) => ({ sceneId, clipUrl: state.clipUrl! }));
+
+    // Determine if pipeline is still active and needs loading indicator
+    const isPipelineActive = status === "building" ||
+                             status === "generating" ||
+                             status === "paused";
 
     set({
       pipelineMode: mode,
@@ -462,16 +602,15 @@ export const useAppStore = create<AppState>((set) => ({
       currentStage,
       pipelineError: null,
       conceptInput: conceptText,
-      loading: status === "complete" || status === "failed" ? null : "pipeline",
+      loading: isPipelineActive ? "pipeline" : null,
       livePlan: plan,
       liveScenes: [],
-      liveClips: [],
+      liveClips,
       validationReport: null,
-      isPaused: false,
-      sceneStates: plan ? Object.fromEntries(
-        plan.sceneBreakdown.map((s) => [s.sceneId, { status: "pending" as SceneStatus }]),
-      ) : {},
+      isPaused: status === "paused",
+      sceneStates: resolvedSceneStates,
       planApprovalPending: status === "awaiting-approval",
+      pipelineAwaitingConfirmation: status === "awaiting-confirmation",
       approvalLoading: false,
       approvalError: null,
       pendingRedo: null,
@@ -495,6 +634,7 @@ export const useAppStore = create<AppState>((set) => ({
       isPaused: false,
       sceneStates: {},
       planApprovalPending: false,
+      pipelineAwaitingConfirmation: false,
       approvalLoading: false,
       approvalError: null,
       pendingRedo: null,
@@ -526,6 +666,7 @@ export const useAppStore = create<AppState>((set) => ({
         liveClips: [],
         validationReport: stageIndex > 2 ? state.validationReport : null,
         isPaused: false,
+        pipelineAwaitingConfirmation: false,
       };
     }),
 
@@ -556,8 +697,11 @@ export const useAppStore = create<AppState>((set) => ({
       isPaused: false,
       sceneStates: {},
       planApprovalPending: false,
+      pipelineAwaitingConfirmation: false,
       approvalLoading: false,
       approvalError: null,
       pendingRedo: null,
+      assets: [],
+      autoContinue: true,
     }),
 }));
