@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import { readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 
-import { getVideoPath, ensureMediaDir } from "@/lib/manim-runner";
+import { getVideoPath } from "@/lib/manim-runner";
+import { createVideoResponse } from "@/lib/pipeline/video-response";
 import { getJobDir } from "@/lib/pipeline/job-manager";
 
 export async function GET(
@@ -46,17 +46,10 @@ export async function GET(
   }
 
   try {
-    const buffer = await readFile(videoPath);
-    return new Response(buffer, {
-      headers: {
-        "Content-Type": "video/mp4",
-        "Content-Length": String(buffer.length),
-        "Cache-Control": "private, max-age=3600",
-      },
-    });
+    return createVideoResponse(_request, videoPath);
   } catch {
     return NextResponse.json(
-      { error: "Failed to read video file." },
+      { error: "Failed to stream video file." },
       { status: 500 },
     );
   }

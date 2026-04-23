@@ -2,6 +2,7 @@ import type { PipelineStageHandler } from "../stage";
 import type { PipelineEvent, PipelineInput, PlanOutput, SceneEntry, InteractionBlock } from "../types";
 import { resolveProvider, callLLM, getProviderModel } from "../llm-client";
 import { getPlanEstimate, recordPlanTiming } from "../job-manager";
+import { isValidPlanOutput, parseSceneId } from "../contracts";
 
 /* ------------------------------------------------------------------ */
 /*  Stage 1: Pedagogical Plan                                           */
@@ -165,7 +166,7 @@ function parsePlanResponse(raw: string): PlanOutput {
   const sceneBreakdown: SceneEntry[] = (p.sceneBreakdown as Record<string, unknown>[]).map(
     (s) => {
       const scene: SceneEntry = {
-        sceneId: String(s.sceneId ?? ""),
+        sceneId: parseSceneId(s.sceneId) ?? "",
         description: String(s.description ?? ""),
         mathContent: String(s.mathContent ?? ""),
         estimatedSeconds: Number(s.estimatedSeconds ?? 10),
@@ -245,12 +246,18 @@ function parsePlanResponse(raw: string): PlanOutput {
     }
   }
 
-  return {
+  const candidatePlan: PlanOutput = {
     title: p.title as string,
     estimatedDuration: p.estimatedDuration as number,
     steps,
     sceneBreakdown,
   };
+
+  if (!isValidPlanOutput(candidatePlan)) {
+    throw new Error("Plan failed contract validation (invalid IDs, duplicates, or bounds).");
+  }
+
+  return candidatePlan;
 }
 
 /* ------------------------------------------------------------------ */

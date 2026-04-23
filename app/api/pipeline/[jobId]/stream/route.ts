@@ -23,6 +23,7 @@ export async function GET(
   }
 
   const encoder = new TextEncoder();
+  let cancelCleanup: (() => void) | null = null;
 
   const readable = new ReadableStream({
     async start(controller) {
@@ -59,6 +60,8 @@ export async function GET(
         }
         try { controller.close(); } catch {}
       };
+
+      cancelCleanup = cleanup;
 
       // Try to connect to a live pipeline
       if (ctrl) {
@@ -368,7 +371,7 @@ export async function GET(
       }
     },
     cancel() {
-      // Client disconnected — cleanup happens via cleanupFns
+      cancelCleanup?.();
     },
   });
 
