@@ -18,9 +18,11 @@ function loadExample(filename: string): string {
   }
 }
 
-const EXAMPLE_FRACTION = loadExample("fraction_multiply.py");
-const EXAMPLE_DIVISION = loadExample("long_division.py");
-const EXAMPLE_SUBTRACTION = loadExample("subtraction_regrouping.py");
+const EXAMPLE_FRACTION = loadExample("gold_v2_fraction_pizza_addition.py");
+const EXAMPLE_PLACE_VALUE = loadExample("gold_v2_place_value_blocks.py");
+const EXAMPLE_DISTRIBUTIVE = loadExample("gold_v2_distributive_property_array.py");
+const EXAMPLE_AREA_PERIMETER = loadExample("gold_v2_area_perimeter_garden.py");
+const EXAMPLE_PERCENT = loadExample("gold_v2_fraction_to_percent_grid.py");
 
 /* ------------------------------------------------------------------ */
 /*  System prompt                                                       */
@@ -62,7 +64,7 @@ You MUST respond with a single JSON object matching this schema EXACTLY — no m
 
 ─── MANDATORY CODE ARCHITECTURE ───
 
-Study the two COMPLETE examples below. Your code MUST follow these patterns exactly:
+Study the five COMPLETE gold v2 examples below. Your code MUST follow these object-first, visually checked patterns:
 
 STRUCTURE:
 • \`from manim import *\` and \`import numpy as np\` at top
@@ -147,7 +149,7 @@ PHASE TRANSITION PATTERN (mandatory between methods):
 19. KEEP ANIMATIONS SIMPLE. Stick to proven patterns: Write, FadeIn, FadeOut, Create, ReplacementTransform, LaggedStart, SurroundingRectangle, Indicate. Do NOT use obscure or experimental Manim features. Every animation must work reliably with Manim Community v0.18+.
 
 ═══════════════════════════════════════════════════════════════
-  EXAMPLE 1: Fraction Multiplication with Area Model
+  EXAMPLE 1: Unlike-Denominator Fraction Addition with Pizza Slices
 ═══════════════════════════════════════════════════════════════
 
 \`\`\`python
@@ -155,19 +157,35 @@ ${EXAMPLE_FRACTION}
 \`\`\`
 
 ═══════════════════════════════════════════════════════════════
-  EXAMPLE 2: Long Division with Remainders
+  EXAMPLE 2: Place Value with Base-Ten Blocks
 ═══════════════════════════════════════════════════════════════
 
 \`\`\`python
-${EXAMPLE_DIVISION}
+${EXAMPLE_PLACE_VALUE}
 \`\`\`
 
 ═══════════════════════════════════════════════════════════════
-  EXAMPLE 3: Subtraction with Regrouping (Manipulatives Layout)
+  EXAMPLE 3: Distributive Property with Garden Array
 ═══════════════════════════════════════════════════════════════
 
 \`\`\`python
-${EXAMPLE_SUBTRACTION}
+${EXAMPLE_DISTRIBUTIVE}
+\`\`\`
+
+═══════════════════════════════════════════════════════════════
+  EXAMPLE 4: Area vs Perimeter with Garden Model
+═══════════════════════════════════════════════════════════════
+
+\`\`\`python
+${EXAMPLE_AREA_PERIMETER}
+\`\`\`
+
+═══════════════════════════════════════════════════════════════
+  EXAMPLE 5: Fraction to Percent with 100 Grid
+═══════════════════════════════════════════════════════════════
+
+\`\`\`python
+${EXAMPLE_PERCENT}
 \`\`\`
 
 ═══════════════════════════════════════════════════════════════
@@ -343,7 +361,7 @@ export async function POST(request: Request) {
           : await streamOpenAI(
               useDeepSeek ? deepseekKey! : openaiKey!,
               userPrompt,
-              useDeepSeek ? "deepseek-chat" : "gpt-4o",
+              useDeepSeek ? "deepseek-v4-pro" : "gpt-4o",
               (text) => send({ type: "delta", text }),
               useDeepSeek ? "https://api.deepseek.com" : undefined,
               abort.signal,

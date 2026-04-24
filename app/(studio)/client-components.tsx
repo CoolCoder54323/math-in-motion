@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useAuth, ProtectedRoute } from "@/lib/auth-context";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -19,7 +20,7 @@ function StudioNav() {
     <nav className="flex-shrink-0 border-b border-[color:var(--rule)]/30 bg-[color:var(--paper)]/80 backdrop-blur">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3 md:px-12">
         <Link href="/" className="flex items-center gap-2.5">
-          <img src="/logo.png" alt="Math In Motion" className="h-7 w-7" />
+          <Image src="/logo.png" alt="Math In Motion" width={28} height={28} className="h-7 w-7" />
           <span className="font-heading text-lg font-semibold text-[color:var(--umber)]">Math In Motion</span>
         </Link>
 

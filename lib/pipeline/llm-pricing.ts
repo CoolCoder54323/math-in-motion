@@ -24,15 +24,15 @@ export const LLM_PRICING = {
     },
   },
   deepseek: {
-    "deepseek-chat": {
-      input: 0.28,
+    "deepseek-v4-flash": {
+      input: 0.14,
       cachedInput: 0.028,
-      output: 0.42,
+      output: 0.28,
     },
-    "deepseek-reasoner": {
-      input: 0.55,
-      cachedInput: 0.055,
-      output: 2.19,
+    "deepseek-v4-pro": {
+      input: 1.74,
+      cachedInput: 0.145,
+      output: 3.48,
     },
   },
   kimi: {

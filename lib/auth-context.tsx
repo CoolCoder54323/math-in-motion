@@ -64,6 +64,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const stored = loadUser()
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- this mount-only hydration restores persisted auth state from localStorage.
     if (stored) setUser(stored)
     setHydrated(true)
   }, [])

@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useMemo, useState, type ChangeEvent } from "react";
 
 import { MathText } from "@/components/MathText";
@@ -405,14 +406,14 @@ function SceneCard({
         {/* Pedagogy fields */}
         <PedagogyFields scene={scene} editable={editable} onEditScene={onEditScene} />
 
-        {/* Narration (from the matching AnimationStep) */}
-        {step && (
+        {/* Visual note (legacy narration field kept for compatibility) */}
+        {step && (editable || step.narration) && (
           <div className="rounded-lg border-l-[3px] border-[color:var(--accent)]/60 bg-[oklch(0.94_0.06_82/0.7)] px-4 py-2">
             <span
               aria-hidden="true"
               className="mr-1 font-heading text-xs uppercase tracking-[0.25em] text-[color:var(--umber)]/50"
             >
-              narration
+              visual note
             </span>
             <EditableField
               label={null}
@@ -420,7 +421,7 @@ function SceneCard({
               editable={editable}
               multiline
               onChange={(narration) => onEditStep({ narration })}
-              placeholder="What the narrator will say here"
+              placeholder="Optional visual note for this beat"
               readonlyClass="font-heading italic leading-relaxed text-[color:var(--umber)]/90"
               useMathText
               quotes
@@ -682,11 +683,13 @@ function ScenePreview({
       <div className="rounded-[18px] bg-gradient-to-br from-[color:var(--sunflower-deep)] via-[color:var(--accent)] to-[color:var(--sunflower)] p-[2px] shadow-[0_18px_40px_-22px_oklch(0.3_0.1_55/0.45)]">
         <div className="overflow-hidden rounded-[16px] bg-[color:var(--paper)]">
           {isThumbnail && thumbnailUrl ? (
-            <img
+            <Image
               src={thumbnailUrl}
               alt="Thumbnail"
-              className="block w-full"
-              style={{ aspectRatio: "16/9" }}
+              width={1280}
+              height={720}
+              unoptimized
+              className="block h-auto w-full"
             />
           ) : (
             <video
@@ -779,4 +782,3 @@ function EditableField({
     </div>
   );
 }
-

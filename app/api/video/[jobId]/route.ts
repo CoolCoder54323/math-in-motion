@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 
-import { getVideoPath, ensureMediaDir } from "@/lib/manim-runner";
+import { getVideoPath } from "@/lib/manim-runner";
 import { getJobDir } from "@/lib/pipeline/job-manager";
 
 export async function GET(

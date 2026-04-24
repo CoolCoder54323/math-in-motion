@@ -1,5 +1,5 @@
 #!/bin/sh
-'''exec' "/Users/nicholasdixon/Projects/Math In Motion/math-in-motion/.venv/bin/python3" "$0" "$@"
+'''exec' "/Users/nicholasdixon/Projects/Math In Motion/math-in-motion/.venv/bin/python" "$0" "$@"
 ' '''
 # -*- coding: utf-8 -*-
 import re

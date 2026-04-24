@@ -311,7 +311,7 @@ function StageArtifactContent({ stage, isRunning }: { stage: PipelineStage; isRu
           {livePlan.steps.length > 0 && (
             <div className="mt-2 border-t border-[color:var(--rule)]/20 pt-2">
               <p className="mb-1.5 font-heading text-[10px] uppercase tracking-[0.2em] text-[color:var(--umber)]/35">
-                Narration
+                Visual beats
               </p>
               <ol className="flex flex-col gap-1">
                 {livePlan.steps.map((step, i) => (
@@ -319,10 +319,12 @@ function StageArtifactContent({ stage, isRunning }: { stage: PipelineStage; isRu
                     <span className="font-semibold text-[color:var(--umber)]/80">
                       <MathText>{step.label}</MathText>
                     </span>
-                    {" \u2014 "}
-                    <span className="italic">
-                      &ldquo;<MathText>{step.narration}</MathText>&rdquo;
-                    </span>
+                    {step.narration && (
+                      <span className="italic">
+                        {" \u2014 "}
+                        &ldquo;<MathText>{step.narration}</MathText>&rdquo;
+                      </span>
+                    )}
                   </li>
                 ))}
               </ol>

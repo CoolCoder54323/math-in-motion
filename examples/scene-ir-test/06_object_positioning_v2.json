@@ -1,0 +1,110 @@
+{
+  "scenes": [
+    {
+      "sceneId": "object_positioning_v2_character_model",
+      "sceneIR": {
+        "metadata": {
+          "sceneId": "object_positioning_v2_character_model",
+          "role": "worked_example",
+          "visualIntent": "Move whole custom objects between named slots while the math model stays readable.",
+          "densityTarget": 0.36,
+          "baseClass": "Scene",
+          "creativeIntent": {
+            "metaphor": "A guide character moves a model from setup to result.",
+            "reveal": "The visual model travels from the left setup slot to the right result slot.",
+            "finalFrame": "Character points at the completed model and equation."
+          }
+        },
+        "layout": {
+          "safeArea": { "xMin": -6.5, "xMax": 6.5, "yMin": -3.5, "yMax": 3.5 },
+          "coordinateSystem": { "frameWidth": 13, "frameHeight": 7, "unit": "manim" },
+          "zones": [
+            { "id": "title", "x": 0, "y": 2.8, "width": 10.8, "height": 1.0, "note": "legacy title lane" },
+            { "id": "hero", "x": 0, "y": 0.35, "width": 7.2, "height": 3.7, "note": "legacy main lane" },
+            { "id": "footer", "x": 0, "y": -2.75, "width": 10.8, "height": 0.9, "note": "legacy takeaway lane" }
+          ],
+          "slots": [
+            { "id": "title", "x": 0, "y": 2.8, "width": 10.8, "height": 1.0, "padding": 0.12, "note": "heading", "collisionPolicy": "avoid" },
+            { "id": "setup_model", "x": -3.2, "y": 0.35, "width": 3.8, "height": 3.4, "padding": 0.14, "note": "starting model", "collisionPolicy": "avoid" },
+            { "id": "result_model", "x": 2.7, "y": 0.35, "width": 4.6, "height": 3.4, "padding": 0.14, "note": "result model", "collisionPolicy": "avoid" },
+            { "id": "character", "x": -4.9, "y": -2.15, "width": 2.1, "height": 1.7, "padding": 0.1, "note": "guide", "collisionPolicy": "avoid" },
+            { "id": "footer", "x": 0, "y": -2.75, "width": 10.8, "height": 0.9, "padding": 0.12, "note": "takeaway", "collisionPolicy": "avoid" }
+          ],
+          "continuitySlots": ["result_model"]
+        },
+        "objects": [
+          {
+            "id": "title",
+            "kind": "text",
+            "role": "title",
+            "placement": { "slot": "title", "align": "center", "scaleToFit": true, "padding": 0.12 },
+            "ports": {},
+            "props": { "text": "Move the whole model", "fontSize": 38 },
+            "relatedTo": [],
+            "zIndex": 3
+          },
+          {
+            "id": "guide_character",
+            "kind": "compound.character",
+            "role": "guide",
+            "placement": { "slot": "character", "align": "center", "scaleToFit": true, "padding": 0.1 },
+            "ports": { "hand": { "x": 0.6, "y": 0.2 } },
+            "props": { "shape": "star", "expression": "happy", "pose": "point", "bodyColor": "SUN", "scale": 1.0 },
+            "relatedTo": ["fraction_model"],
+            "zIndex": 4
+          },
+          {
+            "id": "fraction_model",
+            "kind": "compound.split_shape",
+            "role": "movable_visual_model",
+            "placement": { "slot": "setup_model", "align": "center", "scaleToFit": true, "padding": 0.14 },
+            "ports": { "label": { "x": 0, "y": -1.2 } },
+            "props": { "shape": "rectangle", "parts": 4, "highlighted": 3, "label": "3/4" },
+            "relatedTo": ["model_label"],
+            "zIndex": 2
+          },
+          {
+            "id": "model_label",
+            "kind": "text",
+            "role": "label",
+            "placement": { "slot": "footer", "align": "center", "scaleToFit": true, "padding": 0.12 },
+            "ports": {},
+            "props": { "text": "Whole objects move; labels attach.", "fontSize": 28 },
+            "relatedTo": ["fraction_model"],
+            "zIndex": 5
+          }
+        ],
+        "beats": [
+          {
+            "id": "enter_objects",
+            "narration": "",
+            "actions": [
+              { "type": "show", "targets": ["title", "guide_character", "fraction_model"], "animation": "fade_in", "runTime": 1.0, "stagger": 0.12 }
+            ],
+            "holdSeconds": 0.2
+          },
+          {
+            "id": "move_model",
+            "narration": "",
+            "actions": [
+              { "type": "move", "targets": ["fraction_model"], "to": { "slot": "result_model", "align": "center", "scaleToFit": true, "padding": 0.14 }, "path": "arc", "clearance": 0.25, "runTime": 0.9 },
+              { "type": "attach", "targets": ["model_label"], "to": "fraction_model", "port": "label", "direction": "DOWN", "buff": 0.18, "runTime": 0.4 }
+            ],
+            "holdSeconds": 0.3
+          },
+          {
+            "id": "point_and_hold",
+            "narration": "",
+            "actions": [
+              { "type": "recipe", "recipe": "point", "targets": ["guide_character"], "props": { "color": "ORANGE" }, "runTime": 0.5 }
+            ],
+            "holdSeconds": 0.6
+          }
+        ],
+        "continuity": {
+          "keep": ["fraction_model", "model_label"]
+        }
+      }
+    }
+  ]
+}

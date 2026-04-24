@@ -65,6 +65,10 @@ export type SceneState = {
   clipUrl?: string;
   durationSeconds?: number;
   error?: string;
+  failureLayer?: import("@/lib/pipeline/types").FailureLayer;
+  failureCode?: string;
+  statusMessage?: string;
+  startedAt?: number;
   inputTokens?: number;
   outputTokens?: number;
   cachedTokens?: number;
@@ -493,7 +497,11 @@ export const useAppStore = create<AppState>((set) => ({
           [sceneId]: {
             ...(state.sceneStates[sceneId] ?? { status: "pending" }),
             status: "regenerating",
+            statusMessage: "Writing Manim code…",
+            startedAt: Date.now(),
             error: undefined,
+            failureLayer: undefined,
+            failureCode: undefined,
           },
         },
       }));

@@ -7,7 +7,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import fs from "node:fs";
 import path from "node:path";
-import { execSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -42,9 +41,11 @@ function loadExample(f) {
   }
 }
 
-const EF = loadExample("fraction_multiply.py");
-const ED = loadExample("long_division.py");
-const ES = loadExample("subtraction_regrouping.py");
+const EF = loadExample("gold_v2_fraction_pizza_addition.py");
+const EP = loadExample("gold_v2_place_value_blocks.py");
+const ED = loadExample("gold_v2_distributive_property_array.py");
+const EA = loadExample("gold_v2_area_perimeter_garden.py");
+const EC = loadExample("gold_v2_fraction_to_percent_grid.py");
 
 const SYSTEM_PROMPT = `You are an expert K-8 math educator and Manim Community animation director. You write flawless, mathematically precise Manim Python code. Accuracy and polish come first.
 
@@ -58,21 +59,31 @@ You MUST respond with a single JSON object matching this schema EXACTLY — no m
   ]
 }
 
-Here are 3 gold-standard examples:
+Here are 5 gold v2 examples:
 
-EXAMPLE 1 — Fraction Multiplication:
+EXAMPLE 1 — Unlike-Denominator Fraction Addition:
 \`\`\`python
 ${EF}
 \`\`\`
 
-EXAMPLE 2 — Long Division:
+EXAMPLE 2 — Place Value:
+\`\`\`python
+${EP}
+\`\`\`
+
+EXAMPLE 3 — Distributive Property:
 \`\`\`python
 ${ED}
 \`\`\`
 
-EXAMPLE 3 — Subtraction with Regrouping:
+EXAMPLE 4 — Area vs Perimeter:
 \`\`\`python
-${ES}
+${EA}
+\`\`\`
+
+EXAMPLE 5 — Fraction to Percent:
+\`\`\`python
+${EC}
 \`\`\`
 
 Requirements:
@@ -157,34 +168,6 @@ async function generateCode(prompt, model) {
   } catch (error) {
     console.error(`  ❌ Generation failed: ${error.message}`);
     return null;
-  }
-}
-
-// Render Manim animation
-function renderAnimation(pythonCode, outputPath) {
-  try {
-    const scriptPath = `/tmp/${Date.now()}_manim.py`;
-    fs.writeFileSync(scriptPath, pythonCode);
-
-    const pythonBin =
-      "/Users/nicholasdixon/anaconda3/envs/prop_api/bin/python";
-    execSync(
-      `${pythonBin} -m manim -ql --disable_caching -o render.mp4 ${scriptPath}`,
-      {
-        cwd: "/tmp",
-        stdio: "pipe",
-      }
-    );
-
-    const srcVideo = "/tmp/videos/1080p60/partial_movie_file_list.txt";
-    if (fs.existsSync(srcVideo)) {
-      fs.copyFileSync(srcVideo, outputPath);
-    }
-
-    fs.unlinkSync(scriptPath);
-    return true;
-  } catch {
-    return false;
   }
 }
 

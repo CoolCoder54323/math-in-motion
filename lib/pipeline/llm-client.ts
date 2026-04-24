@@ -65,7 +65,7 @@ export function getProviderModel(provider: LLMProvider, requestedModel?: string)
     case "anthropic":
       return "claude-opus-4-7";
     case "deepseek":
-      return "deepseek-chat";
+      return "deepseek-v4-pro";
     case "openai":
       return "gpt-4o";
     case "kimi":
@@ -112,16 +112,12 @@ export async function callLLM(
     });
   }
 
-  // DeepSeek caps max_tokens at 8192
-  const clampedMaxTokens =
-    provider.provider === "deepseek" ? Math.min(maxTokens, 8192) : maxTokens;
-
   return callOpenAICompatible({
     systemPrompt,
     userPrompt,
     provider,
     model,
-    maxTokens: clampedMaxTokens,
+    maxTokens,
     temperature,
     signal,
   });
@@ -288,14 +284,9 @@ async function callOpenAICompatible(
 
       const resolvedModel = getProviderModel(provider.provider, model);
 
-      // Kimi k2.6 and deepseek-reasoner only accept temperature=1
+      // Kimi k2.6 only accepts temperature=1.
       const effectiveTemperature =
-        provider.provider === "kimi" || resolvedModel === "deepseek-reasoner"
-          ? 1
-          : (temperature ?? 0.3);
-
-      // deepseek-reasoner does not support response_format or stream_options
-      const isReasoner = resolvedModel === "deepseek-reasoner";
+        provider.provider === "kimi" ? 1 : (temperature ?? 0.3);
 
       const isParts = typeof userPrompt !== "string";
       const cacheable = isParts ? userPrompt.cacheable : userPrompt;
@@ -312,13 +303,16 @@ async function callOpenAICompatible(
           model: resolvedModel,
           temperature: effectiveTemperature,
           max_tokens: maxTokens,
-          ...(!isReasoner ? { response_format: { type: "json_object" } } : {}),
+          ...(provider.provider === "deepseek"
+            ? { extra_body: { thinking: { type: "disabled" } } }
+            : {}),
+          response_format: { type: "json_object" },
           messages: [
             { role: "system", content: systemPrompt },
             { role: "user", content: fullUserPrompt },
           ],
           stream: true,
-          ...(!isReasoner ? { stream_options: { include_usage: true } } : {}),
+          stream_options: { include_usage: true },
         },
         { signal },
       );

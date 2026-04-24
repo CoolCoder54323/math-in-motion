@@ -21,6 +21,8 @@ const ACTION_TYPE_ALIASES: Record<string, string> = {
   emphasize: "emphasize",
   highlight: "highlight",
   move: "move",
+  arrange: "arrange",
+  attach: "attach",
   wait: "wait",
   custom: "custom",
   recipe: "recipe",
@@ -44,6 +46,24 @@ const OBJECT_KIND_ALIASES: Record<string, string> = {
   storyStage: "compound.story_stage",
   character: "compound.character",
   mascot: "compound.character",
+  safeTextBox: "compound.safe_text_box",
+  safe_text_box: "compound.safe_text_box",
+  safeMathLabel: "compound.safe_math_label",
+  safe_math_label: "compound.safe_math_label",
+  safeCallout: "compound.safe_callout",
+  safe_callout: "compound.safe_callout",
+  fractionBar: "compound.fraction_bar",
+  fractionCircle: "compound.fraction_circle",
+  fractionTiles: "compound.fraction_tiles",
+  areaModel: "compound.area_model",
+  arrayModel: "compound.array_grid",
+  baseTenBlocks: "compound.base_ten_blocks",
+  clockFace: "compound.clock_face",
+  perimeterTrace: "compound.perimeter_trace",
+  predictionCard: "compound.prediction_card",
+  revealBanner: "compound.reveal_banner",
+  compareBoard: "compound.compare_board",
+  algebraTiles: "compound.algebra_tiles",
 };
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -217,7 +237,93 @@ function normalizeActions(sceneIR: NormalizedSceneIR, issues: NormalizationIssue
           path: `beats[${beatIndex}].actions[${actionIndex}].targets`,
         });
       }
+
+      if (actionRecord.type === "move") {
+        if (!("to" in actionRecord) && isPlainObject(actionRecord.placement)) {
+          actionRecord.to = actionRecord.placement;
+          delete actionRecord.placement;
+          issues.push({
+            severity: "info",
+            code: "normalization.move_placement_alias",
+            message: "Normalized move placement to to.",
+            path: `beats[${beatIndex}].actions[${actionIndex}].placement`,
+          });
+        }
+        if (!("to" in actionRecord) && typeof actionRecord.slot === "string") {
+          actionRecord.to = { slot: actionRecord.slot, align: "center", scaleToFit: false };
+          delete actionRecord.slot;
+          issues.push({
+            severity: "info",
+            code: "normalization.move_slot_alias",
+            message: "Normalized move slot to placement target.",
+            path: `beats[${beatIndex}].actions[${actionIndex}].slot`,
+          });
+        }
+      }
     }
+  }
+}
+
+function normalizeLayoutSlots(sceneIR: NormalizedSceneIR, issues: NormalizationIssue[]): void {
+  sceneIR.layout = sceneIR.layout ?? { zones: [] };
+  const zones = sceneIR.layout.zones ?? [];
+  if (!Array.isArray(sceneIR.layout.slots) || sceneIR.layout.slots.length === 0) {
+    sceneIR.layout.slots = zones.map((zone) => ({
+      id: zone.id,
+      x: zone.x,
+      y: zone.y,
+      width: zone.width,
+      height: zone.height,
+      padding: 0.12,
+      note: zone.note,
+      collisionPolicy: "avoid",
+    }));
+    if (sceneIR.layout.slots.length > 0) {
+      issues.push({
+        severity: "info",
+        code: "normalization.slots_from_zones",
+        message: "Created layout slots from legacy zones.",
+        path: "layout.slots",
+      });
+    }
+  }
+  if (!sceneIR.layout.coordinateSystem) {
+    sceneIR.layout.coordinateSystem = { frameWidth: 13, frameHeight: 7, unit: "manim" };
+  }
+}
+
+function normalizePlacements(sceneIR: NormalizedSceneIR, issues: NormalizationIssue[]): void {
+  const slotIds = new Set((sceneIR.layout?.slots ?? []).map((slot) => slot.id));
+  for (const [index, objectSpec] of sceneIR.objects.entries()) {
+    if (!objectSpec.placement && objectSpec.anchor) {
+      objectSpec.placement = {
+        slot: objectSpec.anchor.zone,
+        align: objectSpec.anchor.align ?? "center",
+        scaleToFit: true,
+        padding: 0.12,
+        offset: {
+          x: objectSpec.anchor.dx ?? 0,
+          y: objectSpec.anchor.dy ?? 0,
+        },
+      };
+      issues.push({
+        severity: "info",
+        code: "normalization.anchor_to_placement",
+        message: `Created placement for object "${objectSpec.id}" from legacy anchor.`,
+        path: `objects[${index}].anchor`,
+      });
+    }
+    if (objectSpec.placement && !slotIds.has(objectSpec.placement.slot)) {
+      const fallbackSlot = sceneIR.layout?.slots?.[0]?.id ?? "hero";
+      issues.push({
+        severity: "warning",
+        code: "normalization.unknown_slot",
+        message: `Object "${objectSpec.id}" referenced unknown slot "${objectSpec.placement.slot}"; using "${fallbackSlot}".`,
+        path: `objects[${index}].placement.slot`,
+      });
+      objectSpec.placement.slot = fallbackSlot;
+    }
+    objectSpec.ports = objectSpec.ports ?? {};
   }
 }
 
@@ -376,7 +482,9 @@ export function normalizeSceneIR(
   }
 
   const scene = normalized as NormalizedSceneIR;
+  normalizeLayoutSlots(scene, issues);
   normalizeObjectKinds(scene, issues);
+  normalizePlacements(scene, issues);
   normalizeActions(scene, issues);
   normalizeArrayGridHighlights(scene, issues);
   normalizeCustomBlocks(scene, issues);

@@ -87,6 +87,88 @@ export type Mp4BakeBlock = {
   misconceptionText?: string;
 };
 
+export type PlanObjectKind =
+  | "text"
+  | "math"
+  | "shape"
+  | "box"
+  | "character"
+  | "mini_animation"
+  | "visual_model"
+  | "custom_factory";
+
+export type PlanObjectSpec = {
+  id: string;
+  kind: PlanObjectKind;
+  role: string;
+  visualDescription: string;
+  suggestedPrimitive: string;
+  size: "small" | "medium" | "large";
+  placement: string;
+  relatedTo: string[];
+  needsCustomFactory: boolean;
+  customFactoryReason: string | null;
+};
+
+export type CustomObjectAgentArtifact = {
+  objectId: string;
+  factoryName: string;
+  kind: `custom.factory.${string}`;
+  code: string;
+  usageNotes: string;
+  acceptanceChecks: string[];
+  ports?: Record<string, SceneIRPort>;
+  recommendedRecipes?: string[];
+  complexityScore?: number;
+  sourceHash?: string;
+  qualityStatus?: "unchecked" | "passed" | "rejected";
+};
+
+export type PlanLayoutSlot = {
+  id: string;
+  purpose: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  padding?: number;
+  collisionPolicy?: "avoid" | "allow-related-overlap" | "stack";
+};
+
+export type PlanMotionAction =
+  | "enter"
+  | "move"
+  | "transform"
+  | "emphasize"
+  | "exit"
+  | "hold";
+
+export type PlanMotionBeat = {
+  id: string;
+  action: PlanMotionAction;
+  targets: string[];
+  fromSlot?: string;
+  toSlot?: string;
+  path?: "straight" | "arc" | "hop";
+  purpose: string;
+  durationSeconds: number;
+};
+
+export type SceneVisualPlan = {
+  visualBrief?: string;
+  learningTarget?: string;
+  objectPlan?: PlanObjectSpec[];
+  layoutPlan?: {
+    slots: PlanLayoutSlot[];
+  };
+  motionPlan?: PlanMotionBeat[];
+  continuity?: {
+    keep: string[];
+    handoff: string;
+  };
+  acceptanceChecks?: string[];
+};
+
 export type SceneEntry = {
   sceneId: string;
   description: string;
@@ -98,10 +180,11 @@ export type SceneEntry = {
   exitObjects?: string[];
   interaction?: InteractionBlock;
   mp4Bake?: Mp4BakeBlock;
-};
+} & SceneVisualPlan;
 
 export type AnimationStep = {
   label: string;
+  /** @deprecated Visual-only pipeline ignores narration; kept for existing UI/job compatibility. */
   narration: string;
 };
 
@@ -142,6 +225,23 @@ export type SceneIRZone = {
   note?: string;
 };
 
+export type SceneIRCoordinateSystem = {
+  frameWidth: number;
+  frameHeight: number;
+  unit: "manim";
+};
+
+export type SceneIRLayoutSlot = {
+  id: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  padding?: number;
+  note?: string;
+  collisionPolicy?: "avoid" | "allow-related-overlap" | "stack";
+};
+
 export type SceneIRAnchorAlign =
   | "center"
   | "top"
@@ -162,6 +262,23 @@ export type SceneIRAnchor = {
   heightPct?: number;
 };
 
+export type SceneIRPlacement = {
+  slot: string;
+  align?: SceneIRAnchorAlign;
+  scaleToFit?: boolean;
+  padding?: number;
+  offset?: {
+    x?: number;
+    y?: number;
+  };
+};
+
+export type SceneIRPort = {
+  x?: number;
+  y?: number;
+  attachTo?: string;
+};
+
 export type SceneIRMetadata = {
   sceneId: string;
   role?: SceneRole;
@@ -180,7 +297,9 @@ export type SceneIRMetadata = {
 
 export type SceneIRLayout = {
   safeArea?: SceneIRSafeArea;
+  coordinateSystem?: SceneIRCoordinateSystem;
   zones: SceneIRZone[];
+  slots?: SceneIRLayoutSlot[];
   continuitySlots?: string[];
 };
 
@@ -188,7 +307,9 @@ export type SceneIRObject = {
   id: string;
   kind: string;
   role?: string;
+  placement?: SceneIRPlacement;
   anchor?: SceneIRAnchor;
+  ports?: Record<string, SceneIRPort>;
   props?: Record<string, unknown>;
   relatedTo?: string[];
   zIndex?: number;
@@ -231,7 +352,28 @@ export type SceneIRAction =
   | {
       type: "move";
       targets: string[];
-      anchor: SceneIRAnchor;
+      anchor?: SceneIRAnchor;
+      to?: SceneIRPlacement | string;
+      path?: "straight" | "arc" | "hop";
+      avoid?: string[];
+      clearance?: number;
+      runTime?: number;
+    }
+  | {
+      type: "arrange";
+      targets: string[];
+      slot: string;
+      direction?: "row" | "column" | "stack";
+      buff?: number;
+      runTime?: number;
+    }
+  | {
+      type: "attach";
+      targets: string[];
+      to: string;
+      port?: string;
+      direction?: "UP" | "DOWN" | "LEFT" | "RIGHT";
+      buff?: number;
       runTime?: number;
     }
   | {
@@ -335,6 +477,10 @@ export type PreflightMetricCategory =
   | "occupancy"
   | "legibility"
   | "balance"
+  | "contrast"
+  | "blank"
+  | "clipping"
+  | "boring"
   | "render";
 
 export type PreflightIssue = {
@@ -353,6 +499,10 @@ export type PreflightMetrics = {
   occupancyScore: number;
   textLegibilityScore: number;
   balanceScore: number;
+  contrastScore?: number;
+  blankFrameScore?: number;
+  clippingScore?: number;
+  boringScore?: number;
 };
 
 export type PreflightReport = {
@@ -421,10 +571,11 @@ export type PipelineEvent =
   | { type: "plan-awaiting-approval"; plan: PlanOutput }
   | { type: "codegen-ready"; scenes: GeneratedScene[] }
   | { type: "scene-rendered"; sceneId: string; clipUrl: string }
-  | { type: "scene-generating"; sceneId: string }
+  | { type: "scene-generating"; sceneId: string; statusMessage?: string }
+  | { type: "scene-progress"; sceneId: string; statusMessage: string; tokenUsage?: SceneTiming["tokenUsage"] }
   | { type: "scene-ready"; sceneId: string; clipUrl: string; durationSeconds: number; tokenUsage?: SceneTiming["tokenUsage"] }
   | { type: "scene-failed"; sceneId: string; error: string; layer?: FailureLayer; code?: string; tokenUsage?: SceneTiming["tokenUsage"] }
-  | { type: "scene-regenerating"; sceneId: string }
+  | { type: "scene-regenerating"; sceneId: string; statusMessage?: string }
   | { type: "validation-report"; scenes: number; passed: number; issues: ValidationIssue[] }
   | { type: "pipeline-paused"; stage: PipelineStage; resumableFrom: PipelineStage }
   | { type: "pipeline-awaiting-confirmation"; failedCount: number; totalScenes: number; canContinue: boolean };

@@ -17,6 +17,7 @@ import {
   markFallbackSceneIR,
   parseSceneDesignResponseWithDiagnostics,
 } from "../scene-design";
+import { composeSceneIRObjects } from "../object-composer";
 
 type VizCodegenInput = {
   conceptText?: string;
@@ -69,7 +70,7 @@ export const vizCodegenStage: PipelineStageHandler<VizCodegenInput, CodegenOutpu
       }
       const [sceneIR] = parsed.scenes;
       scene = compileScene(
-        normalizeSceneIR(enrichSceneIR(sceneIR), provider.provider),
+        normalizeSceneIR(composeSceneIRObjects(enrichSceneIR(sceneIR)), provider.provider),
         "Viz",
       );
     } catch (error) {
@@ -89,7 +90,7 @@ export const vizCodegenStage: PipelineStageHandler<VizCodegenInput, CodegenOutpu
       );
       scene = compileScene(
         normalizeSceneIR(
-          markFallbackSceneIR(buildFallbackVizSceneIR(input), "model.parse_error"),
+          composeSceneIRObjects(markFallbackSceneIR(buildFallbackVizSceneIR(input), "model.parse_error")),
           provider.provider,
         ),
         "Viz",

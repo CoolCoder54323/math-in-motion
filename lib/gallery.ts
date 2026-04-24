@@ -4,7 +4,6 @@ import {
   writeFileSync,
   renameSync,
   readdirSync,
-  statSync,
 } from "node:fs";
 import { join } from "node:path";
 import type { PipelineManifest, PipelineMode, PipelineStage, SceneEntry } from "./pipeline/types";

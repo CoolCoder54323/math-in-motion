@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { PromptComposer } from "@/components/PromptComposer";
@@ -124,6 +124,58 @@ function TokenCostCaption({ state }: { state: import("@/lib/store").SceneState }
   );
 }
 
+function formatElapsed(ms?: number): string {
+  if (!ms || ms < 0) return "0s";
+  const seconds = Math.max(1, Math.round(ms / 1000));
+  return `${seconds}s`;
+}
+
+function describeFailure(state: import("@/lib/store").SceneState): {
+  title: string;
+  detail: string;
+  options: string[];
+} {
+  const fallback = state.error ?? "Something went wrong while rendering this scene.";
+  switch (state.failureLayer) {
+    case "codegen":
+      return {
+        title: "The scene draft broke while we were writing the Manim code.",
+        detail: fallback,
+        options: [
+          "Try again to get a fresh code pass.",
+          "Edit the scene description if a custom object or wording looks too ambitious.",
+        ],
+      };
+    case "validation":
+      return {
+        title: "The scene was generated, but it failed checks before rendering.",
+        detail: fallback,
+        options: [
+          "Try again after simplifying the scene instructions.",
+          "Adjust the math or visual note if the layout request is too tight.",
+        ],
+      };
+    case "render":
+      return {
+        title: "The scene code was ready, but Manim could not render it cleanly.",
+        detail: fallback,
+        options: [
+          "Try again and let the renderer take another pass.",
+          "Edit the scene if you want to remove a fragile custom object or effect.",
+        ],
+      };
+    default:
+      return {
+        title: "This scene didn’t finish.",
+        detail: fallback,
+        options: [
+          "Try again for another pass.",
+          "Keep building with the scenes that already succeeded if you prefer.",
+        ],
+      };
+  }
+}
+
 /* ------------------------------------------------------------------ */
 /*  Prompt screen                                                       */
 /* ------------------------------------------------------------------ */
@@ -168,7 +220,6 @@ function ApprovalScreen() {
   const approvalError = useAppStore((s) => s.approvalError);
   const approvePlan = useAppStore((s) => s.approvePlan);
   const pipelineJobId = useAppStore((s) => s.pipelineJobId);
-  const updatePlanDraft = useAppStore((s) => s.updatePlanDraft);
   const updateSceneDraft = useAppStore((s) => s.updateSceneDraft);
   const updateStepDraft = useAppStore((s) => s.updateStepDraft);
   const setLoading = useAppStore((s) => s.setLoading);
@@ -201,12 +252,12 @@ function ApprovalScreen() {
         setLoading("pipeline");
 
         const evtSource = new EventSource(`/api/pipeline/${pipelineJobId}/stream`);
-        const handleEvent = (e: MessageEvent) => {
+      const handleEvent = (e: MessageEvent) => {
           try {
             const event = JSON.parse(e.data);
             const store = useAppStore.getState();
 
-            switch (event.type) {
+      switch (event.type) {
               case "stage-start":
                 store.setCurrentStage(event.stage as PipelineStage);
                 store.updatePipelineStage(event.stage as PipelineStage, { status: "running", progress: 0, message: "" });
@@ -215,13 +266,30 @@ function ApprovalScreen() {
                 store.updatePipelineStage(event.stage as PipelineStage, { status: "success" as const, progress: 100 });
                 break;
               case "scene-generating":
-                store.setSceneState(event.sceneId as string, { status: "generating" });
+                store.setSceneState(event.sceneId as string, {
+                  status: "generating",
+                  statusMessage: (event as { statusMessage?: string }).statusMessage,
+                  startedAt: Date.now(),
+                  error: undefined,
+                  failureLayer: undefined,
+                  failureCode: undefined,
+                });
+                break;
+              case "scene-progress":
+                store.setSceneState(event.sceneId as string, {
+                  statusMessage: (event as { statusMessage: string }).statusMessage,
+                  inputTokens: (event.tokenUsage as { inputTokens?: number } | undefined)?.inputTokens,
+                  outputTokens: (event.tokenUsage as { outputTokens?: number } | undefined)?.outputTokens,
+                  cachedTokens: (event.tokenUsage as { cachedTokens?: number } | undefined)?.cachedTokens,
+                  estimatedCostUSD: (event.tokenUsage as { estimatedCostUSD?: number } | undefined)?.estimatedCostUSD,
+                });
                 break;
               case "scene-ready":
                 store.setSceneState(event.sceneId as string, {
                   status: "ready",
                   clipUrl: event.clipUrl as string,
                   durationSeconds: event.durationSeconds as number,
+                  statusMessage: undefined,
                   inputTokens: (event.tokenUsage as { inputTokens?: number } | undefined)?.inputTokens,
                   outputTokens: (event.tokenUsage as { outputTokens?: number } | undefined)?.outputTokens,
                   cachedTokens: (event.tokenUsage as { cachedTokens?: number } | undefined)?.cachedTokens,
@@ -233,6 +301,9 @@ function ApprovalScreen() {
                 store.setSceneState(event.sceneId as string, {
                   status: "failed",
                   error: event.error as string,
+                  failureLayer: (event as { layer?: import("@/lib/pipeline/types").FailureLayer }).layer,
+                  failureCode: (event as { code?: string }).code,
+                  statusMessage: undefined,
                   inputTokens: (event.tokenUsage as { inputTokens?: number } | undefined)?.inputTokens,
                   outputTokens: (event.tokenUsage as { outputTokens?: number } | undefined)?.outputTokens,
                   cachedTokens: (event.tokenUsage as { cachedTokens?: number } | undefined)?.cachedTokens,
@@ -338,10 +409,8 @@ function ApprovalScreen() {
               index={i}
               scene={scene}
               step={step}
-              planApprovalPending={planApprovalPending}
               onEditScene={(patch) => updateSceneDraft(scene.sceneId, patch)}
               onEditStep={(patch) => { if (step) updateStepDraft(i, patch); }}
-              onEditTitle={(title) => updatePlanDraft({ ...livePlan, title })}
             />
           );
         })}
@@ -354,18 +423,14 @@ function ApprovalSceneCard({
   index,
   scene,
   step,
-  planApprovalPending,
   onEditScene,
   onEditStep,
-  onEditTitle,
 }: {
   index: number;
   scene: { sceneId: string; description: string; mathContent: string };
   step?: { label: string; narration: string };
-  planApprovalPending: boolean;
   onEditScene: (patch: Record<string, string>) => void;
   onEditStep: (patch: Record<string, string>) => void;
-  onEditTitle: (title: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [editDesc, setEditDesc] = useState(scene.description);
@@ -426,10 +491,10 @@ function ApprovalSceneCard({
             useMathText
           />
         )}
-        {/* Narration */}
-        {step && (
+        {/* Visual note */}
+        {step && (editing || step.narration) && (
           <div className="rounded-lg border-l-[3px] border-[color:var(--accent)]/60 bg-[oklch(0.94_0.06_82/0.7)] px-3 py-2">
-            <div className="font-heading text-[10px] font-semibold uppercase tracking-[0.25em] text-[color:var(--umber)]/45">narration</div>
+            <div className="font-heading text-[10px] font-semibold uppercase tracking-[0.25em] text-[color:var(--umber)]/45">visual note</div>
             <ViewEditField
               label={null}
               value={editing ? editNarr : step.narration}
@@ -537,6 +602,12 @@ function BuildScreen() {
   const pipelineAwaitingConfirmation = useAppStore((s) => s.pipelineAwaitingConfirmation);
 
   const [featured, setFeatured] = useState(0);
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, []);
 
   if (!livePlan) return null;
 
@@ -552,6 +623,7 @@ function BuildScreen() {
 
   const featuredScene = scenes[featured];
   const featuredState = sceneStates[featuredScene?.sceneId]?.status ?? "pending";
+  const featuredSceneState = featuredScene ? sceneStates[featuredScene.sceneId] : undefined;
   const featuredClip = sceneStates[featuredScene?.sceneId]?.clipUrl;
   const featuredDuration = sceneStates[featuredScene?.sceneId]?.durationSeconds;
 
@@ -758,20 +830,30 @@ function BuildScreen() {
                     {featuredState === "regenerating" ? "Redrawing this scene…" : "Drawing this scene…"}
                   </p>
                   <p className="mt-1 font-heading text-xs italic text-[color:var(--umber)]/55">
-                    Writing Manim code, validating, rendering. Usually ~10–20s.
+                    {featuredSceneState?.statusMessage ?? "Writing Manim code, validating, rendering. Usually ~10–20s."}
                   </p>
+                  <div className="mt-3 flex items-center justify-center gap-3 font-heading text-[11px] italic text-[color:var(--umber)]/50">
+                    <span>{formatElapsed(now - (featuredSceneState?.startedAt ?? now))} elapsed</span>
+                    <TokenCostCaption state={featuredSceneState ?? { status: "pending" }} />
+                  </div>
                 </div>
               </div>
             ) : featuredState === "failed" ? (
               <div className="flex h-full items-center justify-center rounded-[14px] border-2 border-dashed border-[color:var(--accent)]/50 bg-[oklch(0.96_0.06_55/0.3)]">
-                <div className="text-center">
+                <div className="max-w-xl px-6 text-center">
                   <div className="text-5xl mb-3">⚠️</div>
                   <p className="font-heading text-lg font-semibold italic text-[color:var(--accent)]">
-                    This scene didn&apos;t finish.
+                    {describeFailure(featuredSceneState ?? { status: "failed" }).title}
                   </p>
-                  <p className="mt-1 font-heading text-xs italic text-[color:var(--umber)]/55 max-w-xs mx-auto">
-                    {sceneStates[featuredScene?.sceneId]?.error ?? "Something went wrong while rendering."}
+                  <p className="mt-2 font-heading text-xs italic leading-relaxed text-[color:var(--umber)]/60">
+                    {describeFailure(featuredSceneState ?? { status: "failed" }).detail}
                   </p>
+                  <div className="mt-4 flex flex-col gap-1 font-heading text-[11px] italic text-[color:var(--umber)]/55">
+                    {describeFailure(featuredSceneState ?? { status: "failed" }).options.map((option) => (
+                      <span key={option}>{option}</span>
+                    ))}
+                    {featuredSceneState?.failureCode && <span>Reference: {featuredSceneState.failureCode}</span>}
+                  </div>
                 </div>
               </div>
             ) : (
@@ -809,7 +891,6 @@ function BuildScreen() {
             {scenes.map((sc, i) => {
               const st = sceneStates[sc.sceneId]?.status ?? "pending";
               const isSelected = i === featured;
-              const clip = sceneStates[sc.sceneId]?.clipUrl;
               const dur = sceneStates[sc.sceneId]?.durationSeconds;
               return (
                 <button
@@ -839,8 +920,12 @@ function BuildScreen() {
                         </div>
                       </>
                     ) : st === "generating" || st === "regenerating" ? (
-                      <div className="flex items-center justify-center h-full">
+                      <div className="flex h-full flex-col items-center justify-center">
                         <span className="sway text-base">✏️</span>
+                        <span className="mt-1 font-heading text-[8px] italic text-[color:var(--umber)]/55">
+                          {formatElapsed(now - (sceneStates[sc.sceneId]?.startedAt ?? now))}
+                        </span>
+                        <TokenCostCaption state={sceneStates[sc.sceneId]!} />
                       </div>
                     ) : st === "failed" ? (
                       <div className="flex flex-col items-center justify-center h-full">
@@ -956,6 +1041,7 @@ export function WorkshopApp() {
   // Resume from gallery: if ?jobId= is in the URL, load state from manifest
   const [resumeJobId, setResumeJobId] = useState<string | null>(null);
   const [resuming, setResuming] = useState(false);
+  const resumeAttemptedRef = useRef(false);
   const resumeFromGallery = useAppStore((s) => s.resumeFromGallery);
 
   // Read jobId from URL on mount
@@ -963,9 +1049,7 @@ export function WorkshopApp() {
     if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
     const jobId = params.get("jobId");
-    if (jobId && !resumeJobId) {
-      setResumeJobId(jobId);
-    }
+    if (jobId) setResumeJobId((current) => current ?? jobId);
   }, []);
 
   // Handle live SSE events for resume reconnection
@@ -1010,13 +1094,30 @@ export function WorkshopApp() {
         break;
       }
       case "scene-generating":
-        store.setSceneState(event.sceneId as string, { status: "generating" });
+        store.setSceneState(event.sceneId as string, {
+          status: "generating",
+          statusMessage: (event as { statusMessage?: string }).statusMessage,
+          startedAt: Date.now(),
+          error: undefined,
+          failureLayer: undefined,
+          failureCode: undefined,
+        });
+        break;
+      case "scene-progress":
+        store.setSceneState(event.sceneId as string, {
+          statusMessage: (event as { statusMessage: string }).statusMessage,
+          inputTokens: (event.tokenUsage as { inputTokens?: number } | undefined)?.inputTokens,
+          outputTokens: (event.tokenUsage as { outputTokens?: number } | undefined)?.outputTokens,
+          cachedTokens: (event.tokenUsage as { cachedTokens?: number } | undefined)?.cachedTokens,
+          estimatedCostUSD: (event.tokenUsage as { estimatedCostUSD?: number } | undefined)?.estimatedCostUSD,
+        });
         break;
       case "scene-ready":
         store.setSceneState(event.sceneId as string, {
           status: "ready",
           clipUrl: event.clipUrl as string,
           durationSeconds: event.durationSeconds as number,
+          statusMessage: undefined,
           inputTokens: (event.tokenUsage as { inputTokens?: number } | undefined)?.inputTokens,
           outputTokens: (event.tokenUsage as { outputTokens?: number } | undefined)?.outputTokens,
           cachedTokens: (event.tokenUsage as { cachedTokens?: number } | undefined)?.cachedTokens,
@@ -1028,6 +1129,9 @@ export function WorkshopApp() {
         store.setSceneState(event.sceneId as string, {
           status: "failed",
           error: event.error as string,
+          failureLayer: (event as { layer?: import("@/lib/pipeline/types").FailureLayer }).layer,
+          failureCode: (event as { code?: string }).code,
+          statusMessage: undefined,
           inputTokens: (event.tokenUsage as { inputTokens?: number } | undefined)?.inputTokens,
           outputTokens: (event.tokenUsage as { outputTokens?: number } | undefined)?.outputTokens,
           cachedTokens: (event.tokenUsage as { cachedTokens?: number } | undefined)?.cachedTokens,
@@ -1056,7 +1160,8 @@ export function WorkshopApp() {
 
   // Load state from gallery/manifest and optionally reconnect to live stream
   useEffect(() => {
-    if (!resumeJobId || resuming) return;
+    if (!resumeJobId || resumeAttemptedRef.current) return;
+    resumeAttemptedRef.current = true;
     let cancelled = false;
     let evtSource: EventSource | null = null;
 

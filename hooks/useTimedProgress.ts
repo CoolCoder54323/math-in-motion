@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState } from "react";
 
 /**
  * useTimedProgress — smooth progress bar driven by elapsed time.
@@ -30,24 +30,25 @@ export function useTimedProgress(
   const rafRef = useRef<number>(0);
   const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const tick = useCallback(() => {
-    if (startTimeRef.current === null) return;
-
-    const elapsed = performance.now() - startTimeRef.current;
-    const raw = Math.min(elapsed / estimatedMs, 1);
-    const eased = easeOutCubic(raw);
-    const value = Math.min(eased * STALL_PERCENT, STALL_PERCENT);
-
-    setProgress(value);
-
-    if (raw < 1) {
-      rafRef.current = requestAnimationFrame(tick);
-    }
-  }, [estimatedMs]);
-
   useEffect(() => {
+    const tick = () => {
+      if (startTimeRef.current === null) return;
+
+      const elapsed = performance.now() - startTimeRef.current;
+      const raw = Math.min(elapsed / estimatedMs, 1);
+      const eased = easeOutCubic(raw);
+      const value = Math.min(eased * STALL_PERCENT, STALL_PERCENT);
+
+      setProgress(value);
+
+      if (raw < 1) {
+        rafRef.current = requestAnimationFrame(tick);
+      }
+    };
+
     if (isActive) {
       startTimeRef.current = performance.now();
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- resetting the visible progress is the intended transition when a timed run starts.
       setProgress(0);
       if (holdTimerRef.current) {
         clearTimeout(holdTimerRef.current);
@@ -71,7 +72,7 @@ export function useTimedProgress(
         clearTimeout(holdTimerRef.current);
       }
     };
-  }, [isActive, estimatedMs, holdMs, tick]);
+  }, [isActive, estimatedMs, holdMs]);
 
   return progress;
 }

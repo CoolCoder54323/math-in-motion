@@ -82,7 +82,7 @@ export default function PricingPage() {
             Simple, transparent pricing
           </h1>
           <p className="mx-auto mt-4 max-w-lg text-lg text-[color:var(--umber)]/70">
-            Start free, upgrade when you're ready. No hidden fees.
+            Start free, upgrade when you&apos;re ready. No hidden fees.
           </p>
         </div>
 

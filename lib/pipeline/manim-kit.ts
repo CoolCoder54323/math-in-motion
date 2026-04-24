@@ -91,6 +91,10 @@ function actionHint(action: SceneIRAction): string {
       return `highlight ${action.targets.join(", ")}`;
     case "move":
       return `move ${action.targets.join(", ")}`;
+    case "arrange":
+      return `arrange ${action.targets.join(", ")}`;
+    case "attach":
+      return `attach ${action.targets.join(", ")}`;
     case "wait":
       return `wait ${action.seconds}s`;
     case "custom":
@@ -126,6 +130,7 @@ import numpy as np
 import json
 import os
 import re
+import textwrap
 from pathlib import Path
 
 BG = "#FFF4D6"
@@ -210,6 +215,96 @@ def readable_math_text(value):
     text = text.replace("\\\\text{", "").replace("}", "")
     text = text.replace("\\\\", "")
     return text
+
+def wrap_text_lines(value, max_chars=24, max_lines=3):
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    lines = []
+    for raw_line in text.split("\\n"):
+        wrapped = textwrap.wrap(raw_line, width=max(8, int(max_chars)), break_long_words=False) or [raw_line]
+        lines.extend(wrapped)
+    if len(lines) > max_lines:
+        lines = lines[:max_lines]
+        if len(lines[-1]) > 3:
+            lines[-1] = lines[-1].rstrip(" .,:;") + "..."
+    return "\\n".join(lines)
+
+def fit_mob_to_box(mob, max_width, max_height, min_scale=0.45):
+    max_width = max(0.1, float(max_width or 0.1))
+    max_height = max(0.1, float(max_height or 0.1))
+    width_scale = max_width / max(float(getattr(mob, "width", 0.001)), 0.001)
+    height_scale = max_height / max(float(getattr(mob, "height", 0.001)), 0.001)
+    scale = min(width_scale, height_scale, 1.0)
+    if scale < 1.0:
+        mob.scale(max(scale, min_scale))
+    return mob
+
+def build_safe_text_box(props=None):
+    props = compat_props(props or {})
+    text = wrap_text_lines(
+        props.get("text", props.get("body", "")),
+        props.get("maxChars", props.get("max_chars", 26)),
+        props.get("maxLines", props.get("max_lines", 3)),
+    )
+    color = symbol_value(props.get("color", INK))
+    font_size = props.get("fontSize", props.get("font_size", 30))
+    label = Text(str(text), font_size=font_size, color=color, weight=BOLD, line_spacing=0.86)
+    max_width = props.get("maxWidth", props.get("width", 4.8))
+    max_height = props.get("maxHeight", props.get("height", 1.1))
+    fit_mob_to_box(label, max_width, max_height)
+    if not props.get("box", False):
+        return label
+    box = RoundedRectangle(
+        width=max(float(max_width), label.width + 0.45),
+        height=max(float(max_height), label.height + 0.35),
+        corner_radius=props.get("cornerRadius", 0.18),
+        color=symbol_value(props.get("strokeColor", INK)),
+        stroke_width=props.get("strokeWidth", 2),
+    )
+    box.set_fill(symbol_value(props.get("fillColor", PANEL_BG)), opacity=props.get("fillOpacity", 0.9))
+    label.move_to(box.get_center())
+    group = VGroup(box, label)
+    group.label = label
+    group.box = box
+    return group
+
+def build_safe_callout(props=None):
+    props = compat_props(props or {})
+    width = props.get("width", 5.2)
+    height = props.get("height", 2.0)
+    title = build_safe_text_box({
+        "text": props.get("title", ""),
+        "fontSize": props.get("titleSize", 28),
+        "maxWidth": width - 0.55,
+        "maxHeight": min(0.65, height * 0.35),
+        "maxChars": props.get("titleMaxChars", 24),
+        "maxLines": 1,
+        "color": props.get("titleColor", INK),
+    })
+    body = build_safe_text_box({
+        "text": props.get("body", ""),
+        "fontSize": props.get("bodySize", 22),
+        "maxWidth": width - 0.65,
+        "maxHeight": max(0.7, height - 0.95),
+        "maxChars": props.get("bodyMaxChars", 34),
+        "maxLines": props.get("bodyMaxLines", 3),
+        "color": props.get("bodyColor", INK),
+    })
+    inner = VGroup(title, body).arrange(DOWN, buff=0.16)
+    box = RoundedRectangle(
+        width=max(width, inner.width + 0.6),
+        height=max(height, inner.height + 0.5),
+        corner_radius=props.get("cornerRadius", 0.22),
+        color=symbol_value(props.get("strokeColor", INK)),
+        stroke_width=props.get("strokeWidth", 2.5),
+    )
+    box.set_fill(symbol_value(props.get("fillColor", PANEL_BG)), opacity=props.get("fillOpacity", 0.92))
+    inner.move_to(box.get_center())
+    group = VGroup(box, inner)
+    group.box = box
+    group.label = inner
+    return group
 
 def build_mascot():
     return build_character({"shape": "star", "expression": "happy", "bodyColor": SUN, "scale": 0.8})
@@ -394,16 +489,29 @@ class SceneRuntime:
     def zone_map(self):
         return {zone["id"]: zone for zone in self.scene_ir.get("layout", {}).get("zones", [])}
 
-    def resolve_anchor(self, anchor):
-        anchor = anchor or {}
-        zone = self.zone_map().get(anchor.get("zone"))
-        if zone is None:
-            return np.array([0.0, 0.0, 0.0])
-        x = zone["x"]
-        y = zone["y"]
-        width = zone["width"]
-        height = zone["height"]
-        align = anchor.get("align", "center")
+    def slot_map(self):
+        slots = self.scene_ir.get("layout", {}).get("slots")
+        if slots:
+            return {slot["id"]: slot for slot in slots}
+        return {
+            zone["id"]: {
+                "id": zone["id"],
+                "x": zone["x"],
+                "y": zone["y"],
+                "width": zone["width"],
+                "height": zone["height"],
+                "padding": 0.12,
+                "note": zone.get("note", ""),
+                "collisionPolicy": "avoid",
+            }
+            for zone in self.scene_ir.get("layout", {}).get("zones", [])
+        }
+
+    def _aligned_point(self, box, align="center", offset=None):
+        x = box.get("x", 0.0)
+        y = box.get("y", 0.0)
+        width = box.get("width", 0.0)
+        height = box.get("height", 0.0)
         if "left" in align:
             x -= width / 2
         elif "right" in align:
@@ -412,9 +520,74 @@ class SceneRuntime:
             y += height / 2
         elif "bottom" in align:
             y -= height / 2
-        x += anchor.get("dx", 0.0)
-        y += anchor.get("dy", 0.0)
+        offset = offset or {}
+        x += offset.get("x", offset.get("dx", 0.0))
+        y += offset.get("y", offset.get("dy", 0.0))
         return np.array([x, y, 0.0])
+
+    def resolve_anchor(self, anchor):
+        anchor = anchor or {}
+        zone = self.zone_map().get(anchor.get("zone"))
+        if zone is None:
+            return np.array([0.0, 0.0, 0.0])
+        return self._aligned_point(
+            zone,
+            anchor.get("align", "center"),
+            {"x": anchor.get("dx", 0.0), "y": anchor.get("dy", 0.0)},
+        )
+
+    def resolve_placement(self, placement):
+        if isinstance(placement, str):
+            placement = {"slot": placement, "align": "center"}
+        placement = placement or {}
+        slot = self.slot_map().get(placement.get("slot"))
+        if slot is None:
+            return np.array([0.0, 0.0, 0.0])
+        return self._aligned_point(
+            slot,
+            placement.get("align", "center"),
+            placement.get("offset") or {},
+        )
+
+    def fit_to_slot(self, mob, placement):
+        if isinstance(placement, str):
+            placement = {"slot": placement}
+        placement = placement or {}
+        if not placement.get("scaleToFit", False):
+            return mob
+        slot = self.slot_map().get(placement.get("slot"))
+        if slot is None:
+            return mob
+        padding = placement.get("padding", slot.get("padding", 0.12))
+        max_width = max(0.1, slot.get("width", mob.width) - padding * 2)
+        max_height = max(0.1, slot.get("height", mob.height) - padding * 2)
+        width_scale = max_width / max(mob.width, 0.001)
+        height_scale = max_height / max(mob.height, 0.001)
+        scale = min(width_scale, height_scale, 1.0)
+        if scale < 1.0:
+            mob.scale(scale)
+        return mob
+
+    def resolve_port_point(self, object_id, port_name="center"):
+        mob = self.get(object_id)
+        spec = self.object_specs.get(object_id, {})
+        port = (spec.get("ports") or {}).get(port_name)
+        if isinstance(port, dict):
+            if port.get("attachTo") and port.get("attachTo") in self.registry:
+                return self.resolve_port_point(port.get("attachTo"), port_name)
+            x = port.get("x")
+            y = port.get("y")
+            if x is not None or y is not None:
+                return mob.get_center() + np.array([float(x or 0), float(y or 0), 0.0])
+        points = {
+            "top": mob.get_top(),
+            "bottom": mob.get_bottom(),
+            "left": mob.get_left(),
+            "right": mob.get_right(),
+            "label": mob.get_bottom(),
+            "center": mob.get_center(),
+        }
+        return points.get(port_name, mob.get_center())
 
     def register(self, object_id, mob, spec=None):
         spec = spec or self.object_specs.get(object_id, {})
@@ -822,7 +995,9 @@ class SceneRuntime:
             title.move_to(box.get_center())
             mob = VGroup(box, title)
 
-        point = self.resolve_anchor(spec.get("anchor"))
+        placement = spec.get("placement")
+        point = self.resolve_placement(placement) if placement else self.resolve_anchor(spec.get("anchor"))
+        self.fit_to_slot(mob, placement)
         mob.move_to(point)
         scale = props.get("scale")
         if scale:
@@ -927,10 +1102,65 @@ class SceneRuntime:
             self._play(*animations, run_time=action.get("runTime"))
             self.time_cursor += action.get("runTime") or 0.4
         elif action_type == "move":
-            point = self.resolve_anchor(action["anchor"])
-            animations = [self.get(target_id).animate.move_to(point) for target_id in action["targets"]]
+            destination = action.get("to") or action.get("placement")
+            if destination is None and action.get("anchor"):
+                point = self.resolve_anchor(action["anchor"])
+            else:
+                point = self.resolve_placement(destination)
+            path = action.get("path", "straight")
+            animations = []
+            for target_id in action["targets"]:
+                mob = self.get(target_id)
+                self.fit_to_slot(mob, destination)
+                if path == "hop":
+                    animations.append(mob.animate.shift(UP * action.get("clearance", 0.18)).move_to(point))
+                elif path == "arc":
+                    animations.append(mob.animate.move_to(point + UP * action.get("clearance", 0.08)).move_to(point))
+                else:
+                    animations.append(mob.animate.move_to(point))
             self._play(*animations, run_time=action.get("runTime"))
+            self.visible.update(action["targets"])
             self.time_cursor += action.get("runTime") or 0.6
+        elif action_type == "arrange":
+            targets = action.get("targets") or []
+            mobs = [self.get(target_id) for target_id in targets]
+            if not mobs:
+                return
+            direction_name = action.get("direction", "row")
+            direction = DOWN if direction_name == "column" else RIGHT
+            if direction_name == "stack":
+                for mob in mobs[1:]:
+                    mob.move_to(mobs[0].get_center())
+            else:
+                VGroup(*mobs).arrange(direction, buff=action.get("buff", 0.25))
+            point = self.resolve_placement({"slot": action.get("slot", "hero"), "align": "center"})
+            group = VGroup(*mobs)
+            animations = [group.animate.move_to(point)]
+            self._play(*animations, run_time=action.get("runTime"))
+            self.visible.update(targets)
+            self.time_cursor += action.get("runTime") or 0.6
+        elif action_type == "attach":
+            target_id = action.get("to")
+            if not target_id:
+                return
+            port_point = self.resolve_port_point(target_id, action.get("port", "center"))
+            direction = self._direction(action.get("direction", "DOWN"), DOWN)
+            animations = []
+            for object_id in action.get("targets", []):
+                mob = self.get(object_id)
+                already_visible = mob in self.scene.mobjects
+                start = mob.get_center()
+                mob.next_to(port_point, direction, buff=action.get("buff", 0.18))
+                dest = mob.get_center()
+                if already_visible:
+                    mob.move_to(start)
+                    animations.append(mob.animate.move_to(dest))
+                else:
+                    animations.append(FadeIn(mob))
+            if animations:
+                self._play(*animations, run_time=action.get("runTime"))
+            self.visible.update(action.get("targets", []))
+            self.time_cursor += action.get("runTime") or 0.4
         elif action_type == "wait":
             seconds = action.get("seconds", 0.3)
             self.scene.wait(seconds)

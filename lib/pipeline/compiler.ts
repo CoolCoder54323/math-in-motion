@@ -42,6 +42,20 @@ const CREATIVE_PRIMITIVE_PREFIXES = [
   "compound.percent_grid",
   "compound.fraction_percent_board",
   "compound.misconception_panel",
+  "compound.safe_text_box",
+  "compound.safe_math_label",
+  "compound.safe_callout",
+  "compound.fraction_bar",
+  "compound.fraction_circle",
+  "compound.fraction_tiles",
+  "compound.area_model",
+  "compound.base_ten_blocks",
+  "compound.clock_face",
+  "compound.perimeter_trace",
+  "compound.prediction_card",
+  "compound.reveal_banner",
+  "compound.compare_board",
+  "compound.algebra_tiles",
 ];
 
 function countCreativePrimitives(sceneIR: SceneIR): number {

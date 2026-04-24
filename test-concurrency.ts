@@ -35,7 +35,7 @@ async function callDeepSeek(label: string): Promise<{ elapsed: number; promptTok
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "deepseek-chat",
+        model: "deepseek-v4-flash",
         temperature: 0.3,
         max_tokens: 8000,
         response_format: { type: "json_object" },
@@ -63,9 +63,11 @@ async function callDeepSeek(label: string): Promise<{ elapsed: number; promptTok
       completionTokens: usage.completion_tokens || 0,
       ok: true,
     };
-  } catch (err: any) {
+  } catch (err: unknown) {
     clearTimeout(timeout);
-    console.log(`${label} FAILED:`, err.name, err.message?.slice(0, 100));
+    const message = err instanceof Error ? err.message : String(err);
+    const name = err instanceof Error ? err.name : "UnknownError";
+    console.log(`${label} FAILED:`, name, message.slice(0, 100));
     return { elapsed: -1, promptTokens: 0, completionTokens: 0, ok: false };
   }
 }

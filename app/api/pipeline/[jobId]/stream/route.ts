@@ -115,6 +115,8 @@ export async function GET(
               type: "scene-failed",
               sceneId,
               error: state.error,
+              layer: state.failureLayer,
+              code: state.failureCode,
               tokenUsage: state.inputTokens !== undefined || state.outputTokens !== undefined
                 ? {
                     inputTokens: state.inputTokens ?? 0,
@@ -128,11 +130,13 @@ export async function GET(
             send({
               type: "scene-generating",
               sceneId,
+              statusMessage: state.statusMessage,
             } as PipelineEvent);
           } else if (state.status === "regenerating") {
             send({
               type: "scene-regenerating",
               sceneId,
+              statusMessage: state.statusMessage,
             } as PipelineEvent);
           }
         }
@@ -242,9 +246,13 @@ export async function GET(
                   type: "scene-failed",
                   sceneId,
                   error: state.error,
+                  layer: state.failureLayer,
+                  code: state.failureCode,
                 } as PipelineEvent);
               } else if (state.status === "generating") {
-                send({ type: "scene-generating", sceneId } as PipelineEvent);
+                send({ type: "scene-generating", sceneId, statusMessage: state.statusMessage } as PipelineEvent);
+              } else if (state.status === "regenerating") {
+                send({ type: "scene-regenerating", sceneId, statusMessage: state.statusMessage } as PipelineEvent);
               }
             }
             const totalScenes = plan
@@ -280,9 +288,13 @@ export async function GET(
                   type: "scene-failed",
                   sceneId,
                   error: state.error,
+                  layer: state.failureLayer,
+                  code: state.failureCode,
                 } as PipelineEvent);
               } else if (state.status === "generating") {
-                send({ type: "scene-generating", sceneId } as PipelineEvent);
+                send({ type: "scene-generating", sceneId, statusMessage: state.statusMessage } as PipelineEvent);
+              } else if (state.status === "regenerating") {
+                send({ type: "scene-regenerating", sceneId, statusMessage: state.statusMessage } as PipelineEvent);
               }
             }
 

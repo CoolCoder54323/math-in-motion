@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { useAppStore, type AnimationPlan } from "@/lib/store";
 import { useAuth } from "@/lib/auth-context";
@@ -229,10 +228,8 @@ function HeroPreview() {
 }
 
 function LandingPromptComposer() {
-  const router = useRouter();
   const { user } = useAuth();
   const setAnimationPlan = useAppStore((s) => s.setAnimationPlan);
-  const setLoading = useAppStore((s) => s.setLoading);
 
   const [selectedPrompt, setSelectedPrompt] = useState<string | null>(null);
   const [isWorking, setIsWorking] = useState(false);

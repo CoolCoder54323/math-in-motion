@@ -3,7 +3,6 @@
 import Image from "next/image";
 import {
   useEffect,
-  useMemo,
   useRef,
   useState,
   type ChangeEvent,
@@ -44,8 +43,8 @@ export const MODEL_OPTIONS: Record<
   deepseek: {
     label: "DeepSeek",
     models: [
-      { value: "deepseek-chat", label: "DeepSeek Chat" },
-      { value: "deepseek-reasoner", label: "DeepSeek Reasoner" },
+      { value: "deepseek-v4-pro", label: "DeepSeek V4 Pro" },
+      { value: "deepseek-v4-flash", label: "DeepSeek V4 Flash" },
     ],
   },
   kimi: {

@@ -1,4 +1,12 @@
-import type { PipelineInput, PlanOutput, SceneEntry, SceneIR, SceneIRAction, SceneRole } from "./types";
+import type {
+  PipelineInput,
+  PlanOutput,
+  SceneEntry,
+  SceneIR,
+  SceneIRAction,
+  SceneIRLayoutSlot,
+  SceneRole,
+} from "./types";
 
 const CAPABILITY_CATALOG = `
 AVAILABLE OBJECT KINDS
@@ -20,6 +28,20 @@ AVAILABLE OBJECT KINDS
 - compound.equation_ladder
 - compound.story_stage
 - compound.character
+- compound.safe_text_box
+- compound.safe_math_label
+- compound.safe_callout
+- compound.fraction_bar
+- compound.fraction_circle
+- compound.fraction_tiles
+- compound.area_model
+- compound.base_ten_blocks
+- compound.clock_face
+- compound.perimeter_trace
+- compound.prediction_card
+- compound.reveal_banner
+- compound.compare_board
+- compound.algebra_tiles
 - custom.factory.<name>
 
 AVAILABLE ACTIONS
@@ -28,21 +50,28 @@ AVAILABLE ACTIONS
 - transform
 - emphasize
 - highlight
-- move
+- move: move whole named objects to a placement slot
+- arrange: arrange several whole objects inside one slot as a row, column, or stack
+- attach: attach labels, arrows, or braces to a target object's named port
 - wait
 - custom
-- recipe: use named motion recipes: trace, jump, gather, split, shade, count_in, morph_to_equation, camera_focus
+- recipe: use named motion recipes: trace, jump, gather, split, shade, count_in, morph_to_equation, camera_focus, shade_sweep, split_and_recombine, slide_compare, mistake_crossout, answer_reveal, celebration_burst
 - character recipes: bounce, nod, celebrate, point
 
 DESIGN RULES
-- Use zones and anchors instead of hard-coded coordinates.
+- Use layout slots and placements instead of hard-coded coordinates.
+- Build custom objects first, then move whole objects around in animated ways.
+- Individual objects can be character drawings, shape clusters, boxes, visual models, or mini animations.
+- Prefer object placement refs over legacy anchors. Use anchors only for compatibility.
 - Use Creative DSL compounds for the main educational visual whenever they fit.
+- Use premium compounds for common K-8 math visuals. Prefer compound.fraction_bar, compound.fraction_circle, compound.area_model, compound.base_ten_blocks, compound.clock_face, compound.perimeter_trace, compound.prediction_card, compound.compare_board, or compound.safe_callout over raw shapes/text.
 - Prefer recipe actions over custom Python for motion.
 - Avoid compound.callout_card as the main visual unless this is a title or summary scene.
 - Every non-summary scene needs a visual metaphor, a reveal sequence, a motion arc, and a memorable final frame.
 - Use compound.character for friendly guides, confused learners, celebration moments, or contrast between wrong/right ideas.
 - Characters should have expression, pose, and color props rather than raw hand-coded body parts.
 - Use customBlocks only when the Creative DSL cannot express the idea.
+- Never hand-roll text wrapping, grids, fraction shading, percent grids, clocks, base-ten blocks, perimeter traces, or labels in customBlocks. Those belong to ManimKit premium primitives.
 - Keep objects named semantically so continuity and custom code are readable.
 - Prefer 3-6 beats per scene.
 - Use custom timeline blocks for cinematic or unusual animations.
@@ -73,6 +102,18 @@ function defaultZones() {
   ];
 }
 
+function defaultSlots(): SceneIRLayoutSlot[] {
+  return [
+    { id: "title", x: 0, y: 2.8, width: 10.8, height: 1.0, padding: 0.12, note: "top heading lane", collisionPolicy: "avoid" },
+    { id: "hero", x: 0, y: 0.35, width: 7.2, height: 3.7, padding: 0.18, note: "main demonstration slot", collisionPolicy: "avoid" },
+    { id: "left_model", x: -3.2, y: 0.35, width: 3.8, height: 3.4, padding: 0.14, note: "left setup or comparison slot", collisionPolicy: "avoid" },
+    { id: "right_model", x: 3.2, y: 0.35, width: 3.8, height: 3.4, padding: 0.14, note: "right result or comparison slot", collisionPolicy: "avoid" },
+    { id: "character", x: -4.9, y: -2.15, width: 2.1, height: 1.7, padding: 0.1, note: "guide character slot", collisionPolicy: "avoid" },
+    { id: "equation", x: 3.8, y: -2.1, width: 4.8, height: 1.2, padding: 0.12, note: "symbolic expression slot", collisionPolicy: "avoid" },
+    { id: "footer", x: 0, y: -2.75, width: 10.8, height: 0.9, padding: 0.12, note: "takeaway lane", collisionPolicy: "avoid" },
+  ];
+}
+
 const SCENE_IR_SYSTEM_PROMPT = `You are designing structured math animation scenes for a compiler-driven Manim pipeline.
 
 Return JSON only. No markdown fences. No commentary.
@@ -93,8 +134,12 @@ The response must match this schema:
         },
         "layout": {
           "safeArea": { "xMin": number, "xMax": number, "yMin": number, "yMax": number },
+          "coordinateSystem": { "frameWidth": number, "frameHeight": number, "unit": "manim" },
           "zones": [
             { "id": string, "x": number, "y": number, "width": number, "height": number, "note": string }
+          ],
+          "slots": [
+            { "id": string, "x": number, "y": number, "width": number, "height": number, "padding": number, "note": string, "collisionPolicy": "avoid" | "allow-related-overlap" | "stack" }
           ],
           "continuitySlots": string[]
         },
@@ -103,7 +148,8 @@ The response must match this schema:
             "id": string,
             "kind": string,
             "role": string,
-            "anchor": { "zone": string, "align": string, "dx": number, "dy": number },
+            "placement": { "slot": string, "align": string, "scaleToFit": boolean, "padding": number, "offset": { "x": number, "y": number } },
+            "ports": { "top": { "x": number, "y": number }, "bottom": { "x": number, "y": number }, "label": { "x": number, "y": number } },
             "props": {},
             "relatedTo": string[],
             "zIndex": number
@@ -119,7 +165,9 @@ The response must match this schema:
               | { "type": "transform", "from": string, "to": string, "animation"?: string, "runTime"?: number }
               | { "type": "emphasize", "targets": [string], "animation"?: string, "runTime"?: number }
               | { "type": "highlight", "targets": [string], "animation"?: string, "runTime"?: number }
-              | { "type": "move", "targets": [string], "animation"?: string, "runTime"?: number }
+              | { "type": "move", "targets": [string], "to": { "slot": string, "align"?: string, "scaleToFit"?: boolean, "padding"?: number, "offset"?: { "x": number, "y": number } }, "path"?: "straight" | "arc" | "hop", "avoid"?: [string], "clearance"?: number, "runTime"?: number }
+              | { "type": "arrange", "targets": [string], "slot": string, "direction"?: "row" | "column" | "stack", "buff"?: number, "runTime"?: number }
+              | { "type": "attach", "targets": [string], "to": string, "port"?: string, "direction"?: "UP" | "DOWN" | "LEFT" | "RIGHT", "buff"?: number, "runTime"?: number }
               | { "type": "wait", "seconds": number }
               | { "type": "custom", "block": string }
               | { "type": "recipe", "recipe": string, "targets"?: [string], "props"?: {}, "runTime"?: number }
@@ -154,7 +202,25 @@ function buildPlanContext(plan: PlanOutput): string {
     "Scenes:",
     ...plan.sceneBreakdown.map(
       (scene, index) =>
-        `${index + 1}. ${scene.sceneId} (${scene.role ?? "unspecified"}, ${scene.estimatedSeconds}s) - ${scene.description} | Math: ${scene.mathContent}`,
+        [
+          `${index + 1}. ${scene.sceneId} (${scene.role ?? "unspecified"}, ${scene.estimatedSeconds}s)`,
+          `Description: ${scene.description}`,
+          `Math: ${scene.mathContent}`,
+          scene.visualBrief ? `Visual brief: ${scene.visualBrief}` : "",
+          scene.learningTarget ? `Learning target: ${scene.learningTarget}` : "",
+          scene.objectPlan?.length
+            ? `Object plan: ${JSON.stringify(scene.objectPlan)}`
+            : "",
+          scene.layoutPlan?.slots?.length
+            ? `Layout slots: ${JSON.stringify(scene.layoutPlan.slots)}`
+            : "",
+          scene.motionPlan?.length
+            ? `Motion plan: ${JSON.stringify(scene.motionPlan)}`
+            : "",
+          scene.acceptanceChecks?.length
+            ? `Acceptance checks: ${scene.acceptanceChecks.join("; ")}`
+            : "",
+        ].filter(Boolean).join("\n  "),
     ),
   ].join("\n");
 }
@@ -168,6 +234,7 @@ export function buildSingleSceneDesignPrompt(
   scene: SceneEntry,
   plan: PlanOutput,
   errorFeedback?: string,
+  customObjectContext?: string,
 ): string {
   const sceneIndex = plan.sceneBreakdown.findIndex((entry) => entry.sceneId === scene.sceneId);
   const previousScene = sceneIndex > 0 ? plan.sceneBreakdown[sceneIndex - 1] : null;
@@ -190,13 +257,21 @@ export function buildSingleSceneDesignPrompt(
     `Description: ${scene.description}`,
     `Math content: ${scene.mathContent}`,
     `Estimated seconds: ${scene.estimatedSeconds}`,
+    scene.visualBrief ? `Visual brief: ${scene.visualBrief}` : "",
+    scene.learningTarget ? `Learning target: ${scene.learningTarget}` : "",
+    scene.objectPlan?.length ? `Required object plan:\n${JSON.stringify(scene.objectPlan, null, 2)}` : "",
+    scene.layoutPlan?.slots?.length ? `Required layout slots:\n${JSON.stringify(scene.layoutPlan.slots, null, 2)}` : "",
+    scene.motionPlan?.length ? `Required motion plan:\n${JSON.stringify(scene.motionPlan, null, 2)}` : "",
+    scene.acceptanceChecks?.length ? `Acceptance checks:\n- ${scene.acceptanceChecks.join("\n- ")}` : "",
     previousScene ? `Previous scene: ${previousScene.sceneId} - ${previousScene.description}` : "",
     nextScene ? `Next scene: ${nextScene.sceneId} - ${nextScene.description}` : "",
     constraints.length > 0 ? `Constraints:\n- ${constraints.join("\n- ")}` : "",
+    customObjectContext ? `Custom object agent outputs:\n${customObjectContext}` : "",
     `Default zones available:\n${JSON.stringify(defaultZones(), null, 2)}`,
+    `Default slots available:\n${JSON.stringify(defaultSlots(), null, 2)}`,
     errorFeedback ? `Repair feedback from the previous attempt:\n${errorFeedback}` : "",
     "",
-    "Return exactly one scene in the scenes array.",
+    "Return exactly one scene in the scenes array. Use placement.slot values that match the required layout slots. Leave beat narration empty strings. If custom object agent outputs are provided, wire those factories into sceneIR.objects and sceneIR.customBlocks.objectFactories rather than redesigning them inline.",
   ]
     .filter(Boolean)
     .join("\n");
@@ -207,8 +282,9 @@ export function buildLessonSceneDesignPrompt(plan: PlanOutput): string {
     buildPlanContext(plan),
     "",
     `Default zones available:\n${JSON.stringify(defaultZones(), null, 2)}`,
+    `Default slots available:\n${JSON.stringify(defaultSlots(), null, 2)}`,
     "",
-    "Design all scenes in the lesson plan.",
+    "Design all scenes in the lesson plan. Use the plan's objectPlan, layoutPlan, and motionPlan as binding decisions unless they are impossible. Leave beat narration empty strings.",
   ].join("\n");
 }
 
@@ -221,6 +297,7 @@ export function buildVizSceneDesignPrompt(input: {
     input.conceptText ? `Concept request: ${input.conceptText}` : "",
     input.latexProblem ? `LaTeX problem: ${input.latexProblem}` : "",
     `Default zones available:\n${JSON.stringify(defaultZones(), null, 2)}`,
+    `Default slots available:\n${JSON.stringify(defaultSlots(), null, 2)}`,
     "Use 4-7 beats.",
     "Use at least one Creative DSL compound and at least one recipe action.",
     "Do not use compound.callout_card as the main visual.",
@@ -352,7 +429,20 @@ export function buildFallbackSceneIR(scene: SceneEntry, title?: string): SceneIR
     },
     layout: {
       safeArea: { xMin: -6.5, xMax: 6.5, yMin: -3.5, yMax: 3.5 },
+      coordinateSystem: { frameWidth: 13, frameHeight: 7, unit: "manim" },
       zones: defaultZones(),
+      slots: scene.layoutPlan?.slots?.length
+        ? scene.layoutPlan.slots.map((slot) => ({
+            id: slot.id,
+            x: slot.x,
+            y: slot.y,
+            width: slot.width,
+            height: slot.height,
+            padding: slot.padding,
+            note: slot.purpose,
+            collisionPolicy: slot.collisionPolicy,
+          }))
+        : defaultSlots(),
       continuitySlots: scene.exitObjects ?? [],
     },
     objects: [
@@ -360,6 +450,7 @@ export function buildFallbackSceneIR(scene: SceneEntry, title?: string): SceneIR
         id: "title",
         kind: "text",
         role: "scene_title",
+        placement: { slot: "title", align: "center", scaleToFit: true, padding: 0.12 },
         anchor: { zone: "title", align: "center" },
         props: { text: sceneTitle, fontSize: 34 },
         relatedTo: [],
@@ -369,6 +460,7 @@ export function buildFallbackSceneIR(scene: SceneEntry, title?: string): SceneIR
         id: "math",
         kind: "compound.callout_card",
         role: "math_content",
+        placement: { slot: "hero", align: "center", scaleToFit: true, padding: 0.18 },
         anchor: { zone: "hero", align: "center" },
         props: {
           title: scene.mathContent || "Math idea",
@@ -420,13 +512,16 @@ export function buildFallbackVizSceneIR(input: {
     },
     layout: {
       safeArea: { xMin: -6.5, xMax: 6.5, yMin: -3.5, yMax: 3.5 },
+      coordinateSystem: { frameWidth: 13, frameHeight: 7, unit: "manim" },
       zones: defaultZones(),
+      slots: defaultSlots(),
     },
     objects: [
       {
         id: "viz_title",
         kind: "text",
         role: "title",
+        placement: { slot: "title", align: "center", scaleToFit: true, padding: 0.12 },
         anchor: { zone: "title", align: "center" },
         props: { text: prompt.slice(0, 80), fontSize: 32 },
         zIndex: 2,
@@ -435,6 +530,7 @@ export function buildFallbackVizSceneIR(input: {
         id: "viz_card",
         kind: "compound.callout_card",
         role: "hero_card",
+        placement: { slot: "hero", align: "center", scaleToFit: true, padding: 0.18 },
         anchor: { zone: "hero", align: "center" },
         props: { title: "Quick visualization", body: prompt, width: 6.2, height: 2.5 },
         zIndex: 1,
@@ -507,7 +603,9 @@ export function enrichSceneIR(sceneIR: SceneIR): SceneIR {
     layout: {
       ...sceneIR.layout,
       safeArea: sceneIR.layout?.safeArea ?? { xMin: -6.5, xMax: 6.5, yMin: -3.5, yMax: 3.5 },
+      coordinateSystem: sceneIR.layout?.coordinateSystem ?? { frameWidth: 13, frameHeight: 7, unit: "manim" },
       zones: sceneIR.layout?.zones?.length ? sceneIR.layout.zones : defaultZones(),
+      slots: sceneIR.layout?.slots?.length ? sceneIR.layout.slots : defaultSlots(),
       continuitySlots: sceneIR.layout?.continuitySlots ?? [],
     },
     objects: (sceneIR.objects ?? []).map((objectSpec, index) => ({

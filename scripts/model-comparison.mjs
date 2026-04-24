@@ -45,9 +45,11 @@ function loadExample(f) {
   }
 }
 
-const EF = loadExample("fraction_multiply.py");
-const ED = loadExample("long_division.py");
-const ES = loadExample("subtraction_regrouping.py");
+const EF = loadExample("gold_v2_fraction_pizza_addition.py");
+const EP = loadExample("gold_v2_place_value_blocks.py");
+const ED = loadExample("gold_v2_distributive_property_array.py");
+const EA = loadExample("gold_v2_area_perimeter_garden.py");
+const EC = loadExample("gold_v2_fraction_to_percent_grid.py");
 
 const SYSTEM_PROMPT = `You are an expert K-8 math educator and Manim Community animation director. You write flawless, mathematically precise Manim Python code. Accuracy and polish come first. Creativity is secondary — never sacrifice correctness for flair.
 
@@ -82,7 +84,7 @@ You MUST respond with a single JSON object matching this schema EXACTLY — no m
 
 ─── MANDATORY CODE ARCHITECTURE ───
 
-Study the three COMPLETE examples below. Your code MUST follow these patterns exactly:
+Study the five COMPLETE gold v2 examples below. Your code MUST follow these visually checked patterns exactly:
 
 STRUCTURE:
 • \`from manim import *\` and \`import numpy as np\` at top
@@ -142,7 +144,7 @@ ANIMATION PATTERNS:
 16. INDEX CAREFULLY. When labeling rows/columns of a grid, verify which index corresponds to which visual position.
 
 ═══════════════════════════════════════════════════════════════
-  EXAMPLE 1: Fraction Multiplication with Area Model
+  EXAMPLE 1: Unlike-Denominator Fraction Addition with Pizza Slices
 ═══════════════════════════════════════════════════════════════
 
 \`\`\`python
@@ -150,7 +152,15 @@ ${EF}
 \`\`\`
 
 ═══════════════════════════════════════════════════════════════
-  EXAMPLE 2: Long Division with Remainders
+  EXAMPLE 2: Place Value with Base-Ten Blocks
+═══════════════════════════════════════════════════════════════
+
+\`\`\`python
+${EP}
+\`\`\`
+
+═══════════════════════════════════════════════════════════════
+  EXAMPLE 3: Distributive Property with Garden Array
 ═══════════════════════════════════════════════════════════════
 
 \`\`\`python
@@ -158,11 +168,19 @@ ${ED}
 \`\`\`
 
 ═══════════════════════════════════════════════════════════════
-  EXAMPLE 3: Subtraction with Regrouping (Manipulatives Layout)
+  EXAMPLE 4: Area vs Perimeter with Garden Model
 ═══════════════════════════════════════════════════════════════
 
 \`\`\`python
-${ES}
+${EA}
+\`\`\`
+
+═══════════════════════════════════════════════════════════════
+  EXAMPLE 5: Fraction to Percent with 100 Grid
+═══════════════════════════════════════════════════════════════
+
+\`\`\`python
+${EC}
 \`\`\`
 
 ═══════════════════════════════════════════════════════════════
@@ -193,9 +211,9 @@ const PROMPTS = [
 // ── Models ────────────────────────────────────────────────────
 const MODELS = [
   {
-    slug: "deepseek-v3",
+    slug: "deepseek-v4-pro",
     type: "openai",
-    model: "deepseek-chat",
+    model: "deepseek-v4-pro",
     baseURL: "https://api.deepseek.com",
     apiKey: DEEPSEEK_KEY,
   },
@@ -350,7 +368,6 @@ for (const prompt of PROMPTS) {
 
   // Launch all model generations in parallel
   const genPromises = MODELS.map(async (model) => {
-    const label = `[${prompt.slug}] ${model.slug}`;
     const startGen = Date.now();
 
     let raw;

@@ -42,9 +42,11 @@ function loadExample(f) {
   }
 }
 
-const EF = loadExample("fraction_multiply.py");
-const ED = loadExample("long_division.py");
-const ES = loadExample("subtraction_regrouping.py");
+const EF = loadExample("gold_v2_fraction_pizza_addition.py");
+const EP = loadExample("gold_v2_place_value_blocks.py");
+const ED = loadExample("gold_v2_distributive_property_array.py");
+const EA = loadExample("gold_v2_area_perimeter_garden.py");
+const EC = loadExample("gold_v2_fraction_to_percent_grid.py");
 
 const SYSTEM_PROMPT = `You are an expert K-8 math educator and Manim Community animation director. You write flawless, mathematically precise Manim Python code.
 
@@ -58,7 +60,7 @@ Your code MUST:
 - Have proper indentation
 - Include config.background_color if needed
 
-Here are 3 gold-standard examples of the format:
+Here are 5 gold v2 examples of the format:
 
 EXAMPLE 1:
 \`\`\`python
@@ -67,12 +69,22 @@ ${EF}
 
 EXAMPLE 2:
 \`\`\`python
-${ED}
+${EP}
 \`\`\`
 
 EXAMPLE 3:
 \`\`\`python
-${ES}
+${ED}
+\`\`\`
+
+EXAMPLE 4:
+\`\`\`python
+${EA}
+\`\`\`
+
+EXAMPLE 5:
+\`\`\`python
+${EC}
 \`\`\`
 
 Generate code in this exact format. Nothing else.`;

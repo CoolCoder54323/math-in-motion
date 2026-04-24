@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
@@ -85,10 +86,12 @@ function AnimationCard({
         {isDone && (entry.thumbnailUrl || entry.videoUrl) ? (
           <>
             {entry.thumbnailUrl ? (
-              <img
+              <Image
                 src={entry.thumbnailUrl}
                 alt={entry.title}
-                className="h-full w-full object-cover"
+                fill
+                unoptimized
+                className="object-cover"
               />
             ) : (
               <video

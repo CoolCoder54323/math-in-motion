@@ -378,11 +378,30 @@ export async function executePipeline(
     let shouldPersist = false;
     switch (event.type) {
       case "scene-generating":
-        controller.sceneStates[event.sceneId] = { status: "generating" };
+        controller.sceneStates[event.sceneId] = {
+          status: "generating",
+          statusMessage: event.statusMessage,
+          startedAt: Date.now(),
+        };
         shouldPersist = true;
         break;
       case "scene-regenerating":
-        controller.sceneStates[event.sceneId] = { status: "regenerating" };
+        controller.sceneStates[event.sceneId] = {
+          status: "regenerating",
+          statusMessage: event.statusMessage,
+          startedAt: Date.now(),
+        };
+        shouldPersist = true;
+        break;
+      case "scene-progress":
+        controller.sceneStates[event.sceneId] = {
+          ...(controller.sceneStates[event.sceneId] ?? { status: "generating" }),
+          statusMessage: event.statusMessage,
+          inputTokens: event.tokenUsage?.inputTokens,
+          outputTokens: event.tokenUsage?.outputTokens,
+          cachedTokens: event.tokenUsage?.cachedTokens,
+          estimatedCostUSD: event.tokenUsage?.estimatedCostUSD,
+        };
         shouldPersist = true;
         break;
       case "scene-ready":
@@ -390,6 +409,8 @@ export async function executePipeline(
           status: "ready",
           clipUrl: event.clipUrl,
           durationSeconds: event.durationSeconds,
+          statusMessage: undefined,
+          startedAt: controller.sceneStates[event.sceneId]?.startedAt,
           inputTokens: event.tokenUsage?.inputTokens,
           outputTokens: event.tokenUsage?.outputTokens,
           cachedTokens: event.tokenUsage?.cachedTokens,
@@ -401,6 +422,10 @@ export async function executePipeline(
         controller.sceneStates[event.sceneId] = {
           status: "failed",
           error: event.error,
+          failureLayer: event.layer,
+          failureCode: event.code,
+          statusMessage: undefined,
+          startedAt: controller.sceneStates[event.sceneId]?.startedAt,
           inputTokens: event.tokenUsage?.inputTokens,
           outputTokens: event.tokenUsage?.outputTokens,
           cachedTokens: event.tokenUsage?.cachedTokens,
@@ -642,6 +667,7 @@ export async function processScene(params: {
   onEvent({
     type: isRegeneration ? "scene-regenerating" : "scene-generating",
     sceneId: scene.sceneId,
+    statusMessage: "Writing Manim code…",
   });
 
   const slot: SceneSlot = slots.get(scene.sceneId) ?? { issues: [] };
@@ -683,12 +709,24 @@ export async function processScene(params: {
         }
       }
       currentCodegenMs = Date.now() - codegenStart;
+      onEvent({
+        type: "scene-progress",
+        sceneId: scene.sceneId,
+        statusMessage: "Checking the scene for layout and logic issues…",
+        tokenUsage: serializeUsage(sceneUsage),
+      });
 
       const validateStart = Date.now();
       const validation = await validateSingleScene(generated, ctx);
       currentValidateMs = Date.now() - validateStart;
       attemptScene = validation.scene;
       attemptIssues = [...validation.issues];
+      onEvent({
+        type: "scene-progress",
+        sceneId: scene.sceneId,
+        statusMessage: "Rendering frames in Manim…",
+        tokenUsage: serializeUsage(sceneUsage),
+      });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       if (attempt < maxAttempts - 1) {

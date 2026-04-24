@@ -120,7 +120,20 @@ export async function POST(
     events.push(event);
     // Update in-memory scene state as we go
     if (event.type === "scene-generating" || event.type === "scene-regenerating") {
-      controller.sceneStates[event.sceneId] = { status: "generating" };
+      controller.sceneStates[event.sceneId] = {
+        status: event.type === "scene-regenerating" ? "regenerating" : "generating",
+        statusMessage: event.statusMessage,
+        startedAt: Date.now(),
+      };
+    } else if (event.type === "scene-progress") {
+      controller.sceneStates[event.sceneId] = {
+        ...(controller.sceneStates[event.sceneId] ?? { status: "generating" }),
+        statusMessage: event.statusMessage,
+        inputTokens: event.tokenUsage?.inputTokens,
+        outputTokens: event.tokenUsage?.outputTokens,
+        cachedTokens: event.tokenUsage?.cachedTokens,
+        estimatedCostUSD: event.tokenUsage?.estimatedCostUSD,
+      };
     } else if (event.type === "scene-ready") {
       controller.sceneStates[event.sceneId] = {
         status: "ready",
@@ -135,6 +148,8 @@ export async function POST(
       controller.sceneStates[event.sceneId] = {
         status: "failed",
         error: event.error,
+        failureLayer: event.layer,
+        failureCode: event.code,
         inputTokens: event.tokenUsage?.inputTokens,
         outputTokens: event.tokenUsage?.outputTokens,
         cachedTokens: event.tokenUsage?.cachedTokens,

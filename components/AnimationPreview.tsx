@@ -540,10 +540,13 @@ function StepRow({ index, step }: { index: number; step: AnimationStep }) {
           <MathText>{step.label}</MathText>
         </p>
         <p className="rounded-lg border-l-[3px] border-[color:var(--accent)]/60 bg-[oklch(0.94_0.06_82/0.7)] px-4 py-2 font-heading italic leading-relaxed text-[color:var(--umber)]/90">
-          <span aria-hidden="true" className="mr-1">
-            &#128483;
-          </span>
-          &ldquo;<MathText>{step.narration}</MathText>&rdquo;
+          {step.narration ? (
+            <>
+              &ldquo;<MathText>{step.narration}</MathText>&rdquo;
+            </>
+          ) : (
+            "Visual-only beat"
+          )}
         </p>
       </div>
     </li>

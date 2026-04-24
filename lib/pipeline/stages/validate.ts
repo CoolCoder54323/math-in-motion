@@ -91,6 +91,14 @@ function checkSceneIR(scene: GeneratedScene): SceneValidationResult {
       layer: "validation",
     }));
   }
+  if (!Array.isArray(sceneIR.layout?.slots) || sceneIR.layout.slots.length === 0) {
+    issues.push(issue(scene.sceneId, "Scene IR must declare at least one layout slot.", {
+      severity: "error",
+      category: "schema",
+      code: "validation.schema_error",
+      layer: "validation",
+    }));
+  }
 
   if (designMode === "raw") {
     if (!rawConstruct) {
@@ -98,6 +106,14 @@ function checkSceneIR(scene: GeneratedScene): SceneValidationResult {
         severity: "error",
         category: "schema",
         code: "validation.raw_mode_rejected",
+        layer: "validation",
+      }));
+    }
+    if (!sceneIR.metadata?.fallbackReason) {
+      issues.push(issue(scene.sceneId, "Raw Manim mode requires metadata.fallbackReason explaining why the DSL could not express the scene.", {
+        severity: "warning",
+        category: "schema",
+        code: "validation.raw_mode_warning",
         layer: "validation",
       }));
     }
@@ -129,6 +145,28 @@ function checkSceneIR(scene: GeneratedScene): SceneValidationResult {
   }
 
   const objectIds = new Set(sceneIR.objects.map((objectSpec) => objectSpec.id));
+  const slotIds = new Set((sceneIR.layout?.slots ?? []).map((slot) => slot.id));
+  for (const [objectIndex, objectSpec] of sceneIR.objects.entries()) {
+    const slot = objectSpec.placement?.slot;
+    if (slot && !slotIds.has(slot)) {
+      issues.push(issue(scene.sceneId, `Object "${objectSpec.id}" references unknown placement slot "${slot}".`, {
+        severity: "error",
+        category: "schema",
+        code: "validation.schema_error",
+        layer: "validation",
+        suggestedFix: "Use a slot id declared in layout.slots.",
+      }));
+    }
+    if (!slot && !objectSpec.anchor && designMode !== "raw") {
+      issues.push(issue(scene.sceneId, `Object "${objectSpec.id}" has neither placement nor legacy anchor.`, {
+        severity: objectIndex === 0 ? "warning" : "error",
+        category: "schema",
+        code: "validation.schema_error",
+        layer: "validation",
+        suggestedFix: "Add objects[].placement with a layout slot.",
+      }));
+    }
+  }
   if (designMode !== "raw") {
     for (const beat of sceneIR.beats) {
       for (const action of beat.actions) {
@@ -163,6 +201,47 @@ function checkSceneIR(scene: GeneratedScene): SceneValidationResult {
               severity: "warning",
               category: "schema",
               code: "validation.schema_warning",
+              layer: "validation",
+            }));
+          }
+        }
+        if (action.type === "move") {
+          const to = action.to;
+          const slot = typeof to === "string" ? to : to?.slot;
+          if (slot && !slotIds.has(slot)) {
+            issues.push(issue(scene.sceneId, `Beat "${beat.id}" moves to unknown slot "${slot}".`, {
+              severity: "error",
+              category: "schema",
+              code: "validation.schema_error",
+              layer: "validation",
+              suggestedFix: "Use a slot id declared in layout.slots.",
+            }));
+          }
+          if (!slot && !action.anchor) {
+            issues.push(issue(scene.sceneId, `Beat "${beat.id}" move action must include to or legacy anchor.`, {
+              severity: "error",
+              category: "schema",
+              code: "validation.schema_error",
+              layer: "validation",
+            }));
+          }
+        }
+        if (action.type === "arrange") {
+          if (!slotIds.has(action.slot)) {
+            issues.push(issue(scene.sceneId, `Beat "${beat.id}" arranges into unknown slot "${action.slot}".`, {
+              severity: "error",
+              category: "schema",
+              code: "validation.schema_error",
+              layer: "validation",
+            }));
+          }
+        }
+        if (action.type === "attach") {
+          if (!objectIds.has(action.to)) {
+            issues.push(issue(scene.sceneId, `Beat "${beat.id}" attaches to unknown object "${action.to}".`, {
+              severity: "error",
+              category: "schema",
+              code: "validation.schema_error",
               layer: "validation",
             }));
           }

@@ -11,8 +11,12 @@ import type {
   SceneEntry,
 } from "../types";
 import { callLLM, resolveProvider, type UserPromptParts } from "../llm-client";
-import type { LLMUsage } from "../llm-usage";
+import { mergeUsage, type LLMUsage } from "../llm-usage";
 import { compileScene, persistCompiledScene } from "../compiler";
+import {
+  buildCustomObjectContext,
+  runCustomObjectAgents,
+} from "../custom-object-agent";
 import { normalizeSceneIR } from "../scene-normalizer";
 import {
   buildFallbackSceneIR,
@@ -23,6 +27,7 @@ import {
   markFallbackSceneIR,
   parseSceneDesignResponseWithDiagnostics,
 } from "../scene-design";
+import { composeSceneIRObjects } from "../object-composer";
 
 type CacheEntry = {
   scene: GeneratedScene;
@@ -95,15 +100,29 @@ export async function codegenSingleScene(
   let generatedScene: GeneratedScene;
 
   try {
+    const customObjects = await runCustomObjectAgents({
+      scene,
+      plan,
+      jobDir: context.jobDir,
+      options,
+      signal: context.signal,
+    });
+    if (customObjects.usage) {
+      usage = mergeUsage(usage, customObjects.usage);
+    }
+    const customObjectContext = buildCustomObjectContext(customObjects.artifacts);
+
     const response = await callLLM({
       systemPrompt,
-      userPrompt,
+      userPrompt: buildPromptParts(
+        buildSingleSceneDesignPrompt(scene, plan, errorFeedback, customObjectContext),
+      ),
       provider,
       model: options?.model,
       maxTokens: 24000,
       signal: context.signal,
     });
-    usage = response.usage;
+    usage = mergeUsage(usage, response.usage);
     writeFileSync(join(context.jobDir, "llm", `${scene.sceneId}.codegen.txt`), response.text, "utf-8");
     const parsed = parseSceneDesignResponseWithDiagnostics(response.text);
     if (parsed.repaired) {
@@ -114,8 +133,29 @@ export async function codegenSingleScene(
       );
     }
     const [sceneIR] = parsed.scenes;
+    if (customObjects.artifacts.length > 0) {
+      sceneIR.customBlocks = {
+        ...(sceneIR.customBlocks ?? {}),
+        objectFactories: [
+          ...(sceneIR.customBlocks?.objectFactories ?? []),
+          ...customObjects.artifacts
+            .filter((artifact) =>
+              !(sceneIR.customBlocks?.objectFactories ?? []).some((entry) => entry.id === artifact.factoryName),
+            )
+            .map((artifact) => ({ id: artifact.factoryName, code: artifact.code })),
+        ],
+      };
+      sceneIR.objects = sceneIR.objects.map((objectSpec) => {
+        const artifact = customObjects.artifacts.find((entry) => entry.objectId === objectSpec.id);
+        return artifact ? { ...objectSpec, kind: artifact.kind } : objectSpec;
+      });
+      sceneIR.metadata.notes = [
+        ...(sceneIR.metadata.notes ?? []),
+        `Custom object agents generated ${customObjects.artifacts.length} factories.`,
+      ];
+    }
     generatedScene = compileScene(
-      normalizeSceneIR(enrichSceneIR(sceneIR), provider.provider),
+      normalizeSceneIR(composeSceneIRObjects(enrichSceneIR(sceneIR)), provider.provider),
     );
   } catch (error) {
     mkdirSync(join(context.jobDir, "errors"), { recursive: true });
@@ -134,7 +174,7 @@ export async function codegenSingleScene(
     );
     generatedScene = compileScene(
       normalizeSceneIR(
-        markFallbackSceneIR(buildFallbackSceneIR(scene, plan.title), "model.parse_error"),
+        composeSceneIRObjects(markFallbackSceneIR(buildFallbackSceneIR(scene, plan.title), "model.parse_error")),
         provider.provider,
       ),
     );
@@ -230,13 +270,13 @@ export const codegenStage: PipelineStageHandler<CodegenInput, CodegenOutput> = {
       const bySceneId = new Map(
         designed.map((sceneIR) => [
           sceneIR.metadata.sceneId,
-          normalizeSceneIR(enrichSceneIR(sceneIR), provider.provider),
+          normalizeSceneIR(composeSceneIRObjects(enrichSceneIR(sceneIR)), provider.provider),
         ]),
       );
       scenes = plan.sceneBreakdown.map((scene) =>
         compileScene(
           bySceneId.get(scene.sceneId)
-            ?? normalizeSceneIR(buildFallbackSceneIR(scene, plan.title), provider.provider),
+            ?? normalizeSceneIR(composeSceneIRObjects(buildFallbackSceneIR(scene, plan.title)), provider.provider),
         ),
       );
     } catch (error) {
@@ -257,7 +297,7 @@ export const codegenStage: PipelineStageHandler<CodegenInput, CodegenOutput> = {
       scenes = plan.sceneBreakdown.map((scene) =>
         compileScene(
           normalizeSceneIR(
-            markFallbackSceneIR(buildFallbackSceneIR(scene, plan.title), "model.parse_error"),
+            composeSceneIRObjects(markFallbackSceneIR(buildFallbackSceneIR(scene, plan.title), "model.parse_error")),
             provider.provider,
           ),
         ),

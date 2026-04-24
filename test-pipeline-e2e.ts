@@ -40,7 +40,7 @@ async function testPipeline() {
   const decoder = new TextDecoder();
   let buffer = "";
   let jobId: string | null = null;
-  let plan: any = null;
+  let plan: Record<string, unknown> | null = null;
   let pipelineDone = false;
 
   // Read events until plan-awaiting-approval

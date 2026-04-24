@@ -28,7 +28,7 @@ function getBaseURL(provider: string): string {
 }
 
 function getModel(provider: string): string {
-  if (provider === "deepseek") return "deepseek-chat";
+  if (provider === "deepseek") return "deepseek-v4-pro";
   if (provider === "kimi") return "kimi-k2.6";
   if (provider === "anthropic") return "claude-sonnet-4-6";
   return "gpt-4o";
