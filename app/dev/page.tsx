@@ -47,6 +47,16 @@ type JobDirInfo = {
   diskUsage: string;
   tokens: TokenAggregate;
   normalizationWarnings: number;
+  quality: {
+    fallbackUsed: boolean;
+    qualityStatus: string | null;
+    renderStatus: string | null;
+    creativePrimitiveCount: number;
+    customBlockCount: number;
+    motionRecipeCount: number;
+    preflightWarningCount: number;
+    boringScore: number;
+  };
   timing: {
     outcome: string;
     totalMs: number;
@@ -440,6 +450,13 @@ export default function DevPage() {
                           : d.normalizationWarnings
                             ? `${d.normalizationWarnings} norm warn`
                             : "-"}
+                        {d.quality ? (
+                          <span className="block text-[10px] text-slate-500">
+                            {d.quality.renderStatus ?? "unchecked"} · {d.quality.qualityStatus ?? "unchecked"} · creative {d.quality.creativePrimitiveCount} · recipes {d.quality.motionRecipeCount} · boring {d.quality.boringScore.toFixed(2)}
+                            {d.quality.fallbackUsed ? " · fallback" : ""}
+                            {d.quality.preflightWarningCount ? ` · ${d.quality.preflightWarningCount} preflight warn` : ""}
+                          </span>
+                        ) : null}
                       </td>
                       <td className="py-1.5 pr-4 text-slate-400">{d.diskUsage}</td>
                       <td className="py-1.5 pr-4 text-emerald-400">{formatUSD(d.tokens.estimatedCostUSD)}</td>

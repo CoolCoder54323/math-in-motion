@@ -12,6 +12,14 @@ AVAILABLE OBJECT KINDS
 - compound.percent_grid
 - compound.fraction_percent_board
 - compound.misconception_panel
+- compound.number_line_walk
+- compound.grouped_dots
+- compound.split_shape
+- compound.trace_path
+- compound.grid_fill
+- compound.equation_ladder
+- compound.story_stage
+- compound.character
 - custom.factory.<name>
 
 AVAILABLE ACTIONS
@@ -23,11 +31,18 @@ AVAILABLE ACTIONS
 - move
 - wait
 - custom
+- recipe: use named motion recipes: trace, jump, gather, split, shade, count_in, morph_to_equation, camera_focus
+- character recipes: bounce, nod, celebrate, point
 
 DESIGN RULES
 - Use zones and anchors instead of hard-coded coordinates.
-- Use compounds for the main educational visual whenever they fit.
-- Use customBlocks only when you genuinely need bespoke motion or rendering.
+- Use Creative DSL compounds for the main educational visual whenever they fit.
+- Prefer recipe actions over custom Python for motion.
+- Avoid compound.callout_card as the main visual unless this is a title or summary scene.
+- Every non-summary scene needs a visual metaphor, a reveal sequence, a motion arc, and a memorable final frame.
+- Use compound.character for friendly guides, confused learners, celebration moments, or contrast between wrong/right ideas.
+- Characters should have expression, pose, and color props rather than raw hand-coded body parts.
+- Use customBlocks only when the Creative DSL cannot express the idea.
 - Keep objects named semantically so continuity and custom code are readable.
 - Prefer 3-6 beats per scene.
 - Use custom timeline blocks for cinematic or unusual animations.
@@ -73,7 +88,8 @@ The response must match this schema:
           "role": "hook" | "introduce" | "worked_example" | "predict" | "address_misconception" | "synthesize",
           "visualIntent": string,
           "densityTarget": number,
-          "baseClass": "Scene" | "MovingCameraScene"
+          "baseClass": "Scene" | "MovingCameraScene",
+          "creativeIntent": { "metaphor": string, "reveal": string, "finalFrame": string }
         },
         "layout": {
           "safeArea": { "xMin": number, "xMax": number, "yMin": number, "yMax": number },
@@ -106,6 +122,7 @@ The response must match this schema:
               | { "type": "move", "targets": [string], "animation"?: string, "runTime"?: number }
               | { "type": "wait", "seconds": number }
               | { "type": "custom", "block": string }
+              | { "type": "recipe", "recipe": string, "targets"?: [string], "props"?: {}, "runTime"?: number }
             ],
             "holdSeconds": number
           }
@@ -204,16 +221,77 @@ export function buildVizSceneDesignPrompt(input: {
     input.conceptText ? `Concept request: ${input.conceptText}` : "",
     input.latexProblem ? `LaTeX problem: ${input.latexProblem}` : "",
     `Default zones available:\n${JSON.stringify(defaultZones(), null, 2)}`,
+    "Use 4-7 beats.",
+    "Use at least one Creative DSL compound and at least one recipe action.",
+    "Do not use compound.callout_card as the main visual.",
+    "Use one clear primary visual model. Do not add a second support model unless it occupies a separate zone and is essential.",
+    "Use high-contrast text colors for the cream background: prefer INK, SKY, GRASS, ORANGE, PINK, or GRAPE. Never use WHITE, YELLOW, GRAY, or GREY for text.",
+    "Keep the final frame clean: no overlapping labels, no extra duplicate fraction labels, and no object crossing through the primary model.",
+    "Prefer compound.number_line_walk, compound.grouped_dots, compound.split_shape, compound.trace_path, compound.grid_fill, or compound.equation_ladder when they match the math idea.",
+    "Return strict JSON. Any constants like PI, BLUE, LEFT, or ORANGE must be strings inside JSON props.",
   ]
     .filter(Boolean)
     .join("\n");
 }
 
-export function parseSceneDesignResponse(raw: string): SceneIR[] {
-  const cleaned = raw
+const JSON_CONSTANTS = [
+  "PI",
+  "TAU",
+  "UP",
+  "DOWN",
+  "LEFT",
+  "RIGHT",
+  "ORIGIN",
+  "WHITE",
+  "BLACK",
+  "BLUE",
+  "GREEN",
+  "RED",
+  "YELLOW",
+  "PURPLE",
+  "ORANGE",
+  "PINK",
+  "GRAY",
+  "GREY",
+  "SKY",
+  "GRASS",
+  "SUN",
+  "GRAPE",
+  "INK",
+  "PANEL_BG",
+  "RED_ACCENT",
+];
+
+export type SceneDesignParseResult = {
+  scenes: SceneIR[];
+  repaired: boolean;
+  repairNotes: string[];
+};
+
+function cleanSceneDesignResponse(raw: string): string {
+  return raw
     .replace(/^```(?:json)?\s*/i, "")
     .replace(/\s*```\s*$/, "")
     .trim();
+}
+
+function repairSceneDesignJson(raw: string): { text: string; notes: string[] } {
+  let text = cleanSceneDesignResponse(raw);
+  const notes: string[] = [];
+  const constantPattern = new RegExp(`(:\\s*)(${JSON_CONSTANTS.join("|")})(\\s*[,}\\]])`, "g");
+  text = text.replace(constantPattern, (_match, prefix: string, constant: string, suffix: string) => {
+    notes.push(`quoted constant ${constant}`);
+    return `${prefix}"${constant}"${suffix}`;
+  });
+  const trailingComma = /,\s*([}\]])/g;
+  if (trailingComma.test(text)) {
+    notes.push("removed trailing commas");
+    text = text.replace(trailingComma, "$1");
+  }
+  return { text, notes: Array.from(new Set(notes)) };
+}
+
+function parseSceneDesignJson(cleaned: string): SceneIR[] {
   const parsed = JSON.parse(cleaned) as { scenes?: Array<{ sceneIR?: SceneIR }> };
   if (!Array.isArray(parsed.scenes) || parsed.scenes.length === 0) {
     throw new Error("Scene design returned no scenes.");
@@ -226,6 +304,39 @@ export function parseSceneDesignResponse(raw: string): SceneIR[] {
   });
 }
 
+export function parseSceneDesignResponseWithDiagnostics(raw: string): SceneDesignParseResult {
+  const cleaned = cleanSceneDesignResponse(raw);
+  try {
+    return { scenes: parseSceneDesignJson(cleaned), repaired: false, repairNotes: [] };
+  } catch (initialError) {
+    const repaired = repairSceneDesignJson(raw);
+    try {
+      return {
+        scenes: parseSceneDesignJson(repaired.text),
+        repaired: repaired.notes.length > 0,
+        repairNotes: repaired.notes,
+      };
+    } catch {
+      throw initialError;
+    }
+  }
+}
+
+export function parseSceneDesignResponse(raw: string): SceneIR[] {
+  return parseSceneDesignResponseWithDiagnostics(raw).scenes;
+}
+
+export function markFallbackSceneIR(sceneIR: SceneIR, reason: string): SceneIR {
+  return {
+    ...sceneIR,
+    metadata: {
+      ...sceneIR.metadata,
+      fallbackReason: reason,
+      qualityStatus: "unchecked",
+    },
+  };
+}
+
 export function buildFallbackSceneIR(scene: SceneEntry, title?: string): SceneIR {
   const sceneTitle = scene.description || title || scene.sceneId;
   const safeRole = scene.role ?? "introduce";
@@ -236,6 +347,8 @@ export function buildFallbackSceneIR(scene: SceneEntry, title?: string): SceneIR
       visualIntent: scene.description,
       densityTarget: 0.34,
       baseClass: "Scene",
+      fallbackReason: "codegen_fallback",
+      qualityStatus: "unchecked",
     },
     layout: {
       safeArea: { xMin: -6.5, xMax: 6.5, yMin: -3.5, yMax: 3.5 },
@@ -302,6 +415,8 @@ export function buildFallbackVizSceneIR(input: {
       visualIntent: prompt,
       densityTarget: 0.3,
       baseClass: "Scene",
+      fallbackReason: "codegen_fallback",
+      qualityStatus: "unchecked",
     },
     layout: {
       safeArea: { xMin: -6.5, xMax: 6.5, yMin: -3.5, yMax: 3.5 },

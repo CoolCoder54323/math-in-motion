@@ -28,6 +28,53 @@ export function inferDesignMode(sceneIR: SceneIR): SceneDesignMode {
   return countCustomBlocks(sceneIR) > 0 ? "hybrid" : "ir";
 }
 
+const CREATIVE_PRIMITIVE_PREFIXES = [
+  "compound.number_line_walk",
+  "compound.grouped_dots",
+  "compound.split_shape",
+  "compound.trace_path",
+  "compound.grid_fill",
+  "compound.equation_ladder",
+  "compound.story_stage",
+  "compound.character",
+  "compound.pizza_ratio",
+  "compound.array_grid",
+  "compound.percent_grid",
+  "compound.fraction_percent_board",
+  "compound.misconception_panel",
+];
+
+function countCreativePrimitives(sceneIR: SceneIR): number {
+  return sceneIR.objects.filter((objectSpec) =>
+    CREATIVE_PRIMITIVE_PREFIXES.includes(objectSpec.kind),
+  ).length;
+}
+
+function countMotionRecipes(sceneIR: SceneIR): number {
+  return sceneIR.beats.reduce(
+    (sum, beat) => sum + beat.actions.filter((action) => action.type === "recipe").length,
+    0,
+  );
+}
+
+function boringScore(sceneIR: SceneIR): number {
+  let score = 0;
+  const calloutCount = sceneIR.objects.filter((objectSpec) => objectSpec.kind === "compound.callout_card").length;
+  const creativeCount = countCreativePrimitives(sceneIR);
+  const motionCount = countMotionRecipes(sceneIR);
+  const transformCount = sceneIR.beats.reduce(
+    (sum, beat) => sum + beat.actions.filter((action) => action.type === "transform" || action.type === "custom").length,
+    0,
+  );
+  if (sceneIR.metadata.fallbackReason) score += 0.35;
+  if (calloutCount > 0 && calloutCount >= sceneIR.objects.length / 2) score += 0.25;
+  if (sceneIR.objects.length < 4) score += 0.15;
+  if (sceneIR.beats.length < 4) score += 0.15;
+  if (creativeCount === 0) score += 0.2;
+  if (motionCount === 0 && transformCount === 0) score += 0.2;
+  return Math.min(1, score);
+}
+
 export function compileScene(sceneIR: NormalizedSceneIR, overrideClassName?: string): GeneratedScene {
   const className = overrideClassName ?? sceneIdToClassName(sceneIR.metadata.sceneId);
   const designMode = inferDesignMode(sceneIR);
@@ -45,6 +92,12 @@ export function compileScene(sceneIR: NormalizedSceneIR, overrideClassName?: str
     capabilitiesUsed,
     customBlockCount: countCustomBlocks(sceneIR),
     normalizationIssues: sceneIR.normalizationIssues ?? [],
+    usedFallback: Boolean(sceneIR.metadata.fallbackReason),
+    renderStatus: "unchecked",
+    qualityStatus: sceneIR.metadata.qualityStatus ?? "unchecked",
+    creativePrimitiveCount: countCreativePrimitives(sceneIR),
+    motionRecipeCount: countMotionRecipes(sceneIR),
+    boringScore: boringScore(sceneIR),
   };
 }
 
@@ -64,6 +117,12 @@ export function persistCompiledScene(jobDir: string, scene: GeneratedScene): voi
         designMode: scene.designMode,
         normalizedFromProvider: scene.sceneIR.normalizedFromProvider,
         normalizationIssues: scene.normalizationIssues,
+        usedFallback: scene.usedFallback,
+        renderStatus: scene.renderStatus,
+        qualityStatus: scene.qualityStatus,
+        creativePrimitiveCount: scene.creativePrimitiveCount,
+        motionRecipeCount: scene.motionRecipeCount,
+        boringScore: scene.boringScore,
         sceneIR: scene.sceneIR,
       },
       null,

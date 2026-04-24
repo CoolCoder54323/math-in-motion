@@ -23,6 +23,7 @@ const ACTION_TYPE_ALIASES: Record<string, string> = {
   move: "move",
   wait: "wait",
   custom: "custom",
+  recipe: "recipe",
 };
 
 const OBJECT_KIND_ALIASES: Record<string, string> = {
@@ -34,6 +35,15 @@ const OBJECT_KIND_ALIASES: Record<string, string> = {
   percentGrid: "compound.percent_grid",
   "custom.factory.dot": "dot",
   "custom.factory.label": "text",
+  numberLineWalk: "compound.number_line_walk",
+  groupedDots: "compound.grouped_dots",
+  splitShape: "compound.split_shape",
+  tracePath: "compound.trace_path",
+  gridFill: "compound.grid_fill",
+  equationLadder: "compound.equation_ladder",
+  storyStage: "compound.story_stage",
+  character: "compound.character",
+  mascot: "compound.character",
 };
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -227,9 +237,33 @@ function wrapTimelineCode(blockId: string, source: string): string {
   const trimmed = source.trim();
   if (!trimmed) return "";
   const fnName = normalizeCustomBlockId(blockId);
-  const exactPattern = new RegExp(`^\\s*def\\s+${fnName}\\s*\\(`, "m");
-  if (exactPattern.test(trimmed)) return trimmed;
-  if (/^\s*def\s+[A-Za-z_][A-Za-z0-9_]*\s*\(/m.test(trimmed)) return trimmed;
+  const exactRuntimePattern = new RegExp(`^\\s*def\\s+${fnName}\\s*\\(\\s*runtime\\s*\\)`, "m");
+  if (exactRuntimePattern.test(trimmed)) return trimmed;
+
+  const definedFunctions = Array.from(trimmed.matchAll(/^\s*def\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(/gm));
+  if (definedFunctions.length > 0) {
+    const firstHelper = definedFunctions.find((match) => match[1] === fnName)?.[1] ?? definedFunctions[0]?.[1];
+    const originalName = `_mim_original_${fnName}`;
+    const renameExact = firstHelper === fnName ? `${originalName} = ${fnName}` : "";
+    return [
+      trimmed,
+      renameExact,
+      "",
+      `def ${fnName}(runtime):`,
+      "    scene = runtime.scene",
+      "    self = RuntimeSceneProxy(scene, runtime.registry)",
+      "    objects = runtime.registry",
+      "    runtime.objects = runtime.registry",
+      "    self.objects = runtime.registry",
+      "    for object_id, mob in runtime.registry.items():",
+      "        setattr(self, object_id, mob)",
+      `    helper = ${firstHelper === fnName ? originalName : firstHelper}`,
+      "    argc = getattr(getattr(helper, \"__code__\", None), \"co_argcount\", 0)",
+      "    if argc >= 1:",
+      "        return helper(runtime)",
+      "    return helper()",
+    ].filter(Boolean).join("\n");
+  }
 
   return [
     `def ${fnName}(runtime):`,
@@ -248,25 +282,28 @@ function wrapObjectFactoryCode(blockId: string, source: string): string {
   const trimmed = source.trim();
   if (!trimmed) return "";
   const fnName = normalizeCustomBlockId(blockId);
-  const exactPattern = new RegExp(`^\\s*def\\s+${fnName}\\s*\\(`, "m");
-  if (exactPattern.test(trimmed)) return trimmed;
+  const exactRuntimePattern = new RegExp(`^\\s*def\\s+${fnName}\\s*\\(\\s*runtime\\s*,\\s*spec\\s*\\)`, "m");
+  if (exactRuntimePattern.test(trimmed)) return trimmed;
 
   const definedFunctions = Array.from(trimmed.matchAll(/^\s*def\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(/gm));
   if (definedFunctions.length > 0) {
-    const firstHelper = definedFunctions[0]?.[1];
+    const firstHelper = definedFunctions.find((match) => match[1] === fnName)?.[1] ?? definedFunctions[0]?.[1];
+    const originalName = `_mim_original_${fnName}`;
+    const renameExact = firstHelper === fnName ? `${originalName} = ${fnName}` : "";
     return [
       trimmed,
+      renameExact,
       "",
       `def ${fnName}(runtime, spec):`,
       "    scene = runtime.scene",
       "    self = RuntimeSceneProxy(scene, runtime.registry)",
-      "    props = spec.get(\"props\") or {}",
-      `    helper = ${firstHelper}`,
+      "    props = compat_props(spec.get(\"props\") or {})",
+      `    helper = ${firstHelper === fnName ? originalName : firstHelper}`,
       "    argc = getattr(getattr(helper, \"__code__\", None), \"co_argcount\", 0)",
       "    if argc >= 2:",
       "        return helper(scene, props)",
       "    if argc == 1:",
-      "        return helper(scene)",
+      "        return helper(props)",
       "    return helper()",
     ].join("\n");
   }
@@ -275,7 +312,7 @@ function wrapObjectFactoryCode(blockId: string, source: string): string {
     `def ${fnName}(runtime, spec):`,
     "    scene = runtime.scene",
     "    self = RuntimeSceneProxy(scene, runtime.registry)",
-    "    props = spec.get(\"props\") or {}",
+    "    props = compat_props(spec.get(\"props\") or {})",
     indentPython(trimmed, 4),
   ].join("\n");
 }

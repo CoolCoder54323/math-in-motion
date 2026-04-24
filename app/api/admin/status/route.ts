@@ -89,6 +89,94 @@ function countNormalizationWarnings(jobDir: string): number {
   return count;
 }
 
+function readQualityAnalytics(jobDir: string): {
+  fallbackUsed: boolean;
+  qualityStatus: string | null;
+  renderStatus: string | null;
+  creativePrimitiveCount: number;
+  customBlockCount: number;
+  motionRecipeCount: number;
+  preflightWarningCount: number;
+  boringScore: number;
+} {
+  const sceneIrDir = join(jobDir, "scene-ir");
+  const preflightDir = join(jobDir, "preflight");
+  const analytics = {
+    fallbackUsed: false,
+    qualityStatus: null as string | null,
+    renderStatus: null as string | null,
+    creativePrimitiveCount: 0,
+    customBlockCount: 0,
+    motionRecipeCount: 0,
+    preflightWarningCount: 0,
+    boringScore: 0,
+  };
+
+  let sceneCount = 0;
+  if (existsSync(sceneIrDir)) {
+    try {
+      for (const file of readdirSync(sceneIrDir)) {
+        if (!file.endsWith(".normalized.json")) continue;
+        const parsed = JSON.parse(readFileSync(join(sceneIrDir, file), "utf-8")) as {
+          usedFallback?: boolean;
+          qualityStatus?: string;
+          renderStatus?: string;
+          creativePrimitiveCount?: number;
+          customBlockCount?: number;
+          motionRecipeCount?: number;
+          boringScore?: number;
+          sceneIR?: {
+            metadata?: { fallbackReason?: string; qualityStatus?: string };
+            customBlocks?: {
+              helpers?: string;
+              rawConstruct?: string;
+              objectFactories?: unknown[];
+              timeline?: unknown[];
+              updaters?: unknown[];
+            };
+          };
+        };
+        sceneCount += 1;
+        analytics.fallbackUsed ||= Boolean(parsed.usedFallback || parsed.sceneIR?.metadata?.fallbackReason);
+        analytics.qualityStatus = parsed.qualityStatus ?? parsed.sceneIR?.metadata?.qualityStatus ?? analytics.qualityStatus;
+        analytics.renderStatus = parsed.renderStatus ?? analytics.renderStatus;
+        analytics.creativePrimitiveCount += parsed.creativePrimitiveCount ?? 0;
+        analytics.motionRecipeCount += parsed.motionRecipeCount ?? 0;
+        analytics.boringScore += parsed.boringScore ?? 0;
+        const custom = parsed.sceneIR?.customBlocks;
+        if (custom) {
+          analytics.customBlockCount += [
+            custom.helpers ? 1 : 0,
+            custom.rawConstruct ? 1 : 0,
+            ...(custom.objectFactories ?? []).map(() => 1),
+            ...(custom.timeline ?? []).map(() => 1),
+            ...(custom.updaters ?? []).map(() => 1),
+          ].reduce((sum, value) => sum + value, 0);
+        }
+      }
+    } catch {
+      // best-effort analytics
+    }
+  }
+
+  if (existsSync(preflightDir)) {
+    try {
+      for (const file of readdirSync(preflightDir)) {
+        if (!file.endsWith(".json")) continue;
+        const report = JSON.parse(readFileSync(join(preflightDir, file), "utf-8")) as {
+          issues?: { severity?: string }[];
+        };
+        analytics.preflightWarningCount += (report.issues ?? []).length;
+      }
+    } catch {
+      // best-effort analytics
+    }
+  }
+
+  analytics.boringScore = sceneCount > 0 ? analytics.boringScore / sceneCount : 0;
+  return analytics;
+}
+
 type TokenAggregate = {
   inputTokens: number;
   outputTokens: number;
@@ -202,6 +290,7 @@ export async function GET(request: NextRequest) {
       failureCode?: PipelineTiming["failureCode"];
     } | null;
     normalizationWarnings: number;
+    quality: ReturnType<typeof readQualityAnalytics>;
   }[] = [];
 
   let totalTokens = zeroTokens();
@@ -260,6 +349,7 @@ export async function GET(request: NextRequest) {
         diskUsage: formatBytes(getDiskUsage(jobDir).size),
         tokens,
         normalizationWarnings: countNormalizationWarnings(jobDir),
+        quality: readQualityAnalytics(jobDir),
         timing: timing
           ? {
               outcome: timing.outcome,

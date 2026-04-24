@@ -120,6 +120,12 @@ export type SceneDesignMode = "ir" | "hybrid" | "raw";
 
 export type SceneBaseClass = "Scene" | "MovingCameraScene";
 
+export type SceneQualityStatus =
+  | "unchecked"
+  | "passed"
+  | "needs-review"
+  | "failed-runtime";
+
 export type SceneIRSafeArea = {
   xMin: number;
   xMax: number;
@@ -163,6 +169,13 @@ export type SceneIRMetadata = {
   densityTarget?: number;
   baseClass?: SceneBaseClass;
   notes?: string[];
+  fallbackReason?: string;
+  qualityStatus?: SceneQualityStatus;
+  creativeIntent?: {
+    metaphor: string;
+    reveal: string;
+    finalFrame: string;
+  };
 };
 
 export type SceneIRLayout = {
@@ -228,6 +241,13 @@ export type SceneIRAction =
   | {
       type: "custom";
       block: string;
+      runTime?: number;
+    }
+  | {
+      type: "recipe";
+      recipe: string;
+      targets?: string[];
+      props?: Record<string, unknown>;
       runTime?: number;
     };
 
@@ -353,6 +373,12 @@ export type GeneratedScene = {
   customBlockCount: number;
   normalizationIssues: NormalizationIssue[];
   preflightReport?: PreflightReport;
+  usedFallback?: boolean;
+  renderStatus?: "unchecked" | "renderable" | "failed";
+  qualityStatus?: SceneQualityStatus;
+  creativePrimitiveCount?: number;
+  motionRecipeCount?: number;
+  boringScore?: number;
 };
 
 export type CodegenOutput = {

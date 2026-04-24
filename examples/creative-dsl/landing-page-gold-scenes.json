@@ -1,0 +1,240 @@
+{
+  "description": "Gold-standard Creative DSL examples based on the landing page prompts. These are intended as prompt exemplars and regression fixtures for engaging Manim scenes.",
+  "scenes": [
+    {
+      "prompt": "Show me how to add fractions with unlike denominators, step by step, using a visual pizza-slice example.",
+      "sceneIR": {
+        "metadata": {
+          "sceneId": "gold_fraction_pizza_addition",
+          "role": "worked_example",
+          "visualIntent": "A character chef turns two unlike pizza slices into a shared denominator, then combines highlighted pieces.",
+          "densityTarget": 0.45,
+          "baseClass": "Scene",
+          "creativeIntent": {
+            "metaphor": "A friendly chef compares two pizzas on a kitchen counter.",
+            "reveal": "Slices split into matching eighths before sliding together.",
+            "finalFrame": "Two pizzas become one clear equation: 1/2 + 1/4 = 3/4."
+          }
+        },
+        "layout": {
+          "safeArea": { "xMin": -6.5, "xMax": 6.5, "yMin": -3.5, "yMax": 3.5 },
+          "zones": [
+            { "id": "title", "x": 0, "y": 2.8, "width": 11, "height": 0.8, "note": "short title" },
+            { "id": "left", "x": -3.4, "y": 0.45, "width": 3.8, "height": 3.6, "note": "first pizza" },
+            { "id": "right", "x": 1.6, "y": 0.45, "width": 4.4, "height": 3.6, "note": "second and combined pizza" },
+            { "id": "guide", "x": -5.4, "y": -2.1, "width": 2.0, "height": 1.8, "note": "character lane" },
+            { "id": "footer", "x": 1.0, "y": -2.7, "width": 8.5, "height": 0.9, "note": "equation lane" }
+          ],
+          "continuitySlots": ["sum_equation"]
+        },
+        "objects": [
+          {
+            "id": "chef",
+            "kind": "compound.character",
+            "role": "guide",
+            "anchor": { "zone": "guide", "align": "center" },
+            "props": { "shape": "star", "expression": "curious", "pose": "point", "bodyColor": "SUN", "accentColor": "PINK", "label": "same-size slices!" },
+            "zIndex": 8
+          },
+          {
+            "id": "half_pizza",
+            "kind": "compound.split_shape",
+            "role": "first_addend",
+            "anchor": { "zone": "left", "align": "center", "dy": 0.25 },
+            "props": { "shape": "circle", "parts": 2, "highlighted": 1, "labelTex": "\\\\frac{1}{2}", "fillColor": "PINK", "radius": 1.2 },
+            "relatedTo": ["chef"],
+            "zIndex": 2
+          },
+          {
+            "id": "quarter_pizza",
+            "kind": "compound.split_shape",
+            "role": "second_addend",
+            "anchor": { "zone": "right", "align": "left", "dx": 0.8, "dy": 0.25 },
+            "props": { "shape": "circle", "parts": 4, "highlighted": 1, "labelTex": "\\\\frac{1}{4}", "fillColor": "SKY", "radius": 1.2 },
+            "relatedTo": ["chef"],
+            "zIndex": 2
+          },
+          {
+            "id": "eighths_pizza",
+            "kind": "compound.split_shape",
+            "role": "common_denominator",
+            "anchor": { "zone": "right", "align": "right", "dx": -0.6, "dy": 0.25 },
+            "props": { "shape": "circle", "parts": 8, "highlighted": 6, "labelTex": "\\\\frac{6}{8}=\\\\frac{3}{4}", "fillColor": "GRASS", "radius": 1.2 },
+            "relatedTo": ["half_pizza", "quarter_pizza"],
+            "zIndex": 3
+          },
+          {
+            "id": "sum_equation",
+            "kind": "compound.equation_ladder",
+            "role": "equation_reveal",
+            "anchor": { "zone": "footer", "align": "center" },
+            "props": { "steps": ["\\\\frac{1}{2}+\\\\frac{1}{4}", "\\\\frac{2}{4}+\\\\frac{1}{4}", "\\\\frac{3}{4}"], "scale": 0.9 },
+            "zIndex": 6
+          }
+        ],
+        "beats": [
+          { "id": "meet_chef", "narration": "Our guide starts with two pizzas cut differently.", "actions": [{ "type": "show", "targets": ["chef", "half_pizza", "quarter_pizza"], "animation": "fade_in", "runTime": 1.0, "stagger": 0.12 }], "holdSeconds": 0.3 },
+          { "id": "same_slices", "narration": "To add them, the slices need the same size.", "actions": [{ "type": "recipe", "recipe": "point", "targets": ["chef"], "runTime": 0.5 }, { "type": "recipe", "recipe": "split", "targets": ["half_pizza", "quarter_pizza"], "runTime": 0.8 }], "holdSeconds": 0.2 },
+          { "id": "reveal_eighths", "narration": "Both pizzas can be seen as eighths.", "actions": [{ "type": "show", "targets": ["eighths_pizza"], "animation": "create", "runTime": 1.0 }, { "type": "recipe", "recipe": "shade", "targets": ["eighths_pizza"], "props": { "color": "GRASS" }, "runTime": 0.6 }], "holdSeconds": 0.4 },
+          { "id": "equation_lands", "narration": "Now the addition is visible.", "actions": [{ "type": "show", "targets": ["sum_equation"], "animation": "write", "runTime": 1.0 }, { "type": "recipe", "recipe": "celebrate", "targets": ["chef"], "runTime": 0.6 }], "holdSeconds": 0.8 }
+        ],
+        "continuity": { "keep": ["sum_equation"] }
+      }
+    },
+    {
+      "prompt": "Explain place value — ones, tens, and hundreds — for 2nd-grade students with a concrete example.",
+      "sceneIR": {
+        "metadata": {
+          "sceneId": "gold_place_value_city",
+          "role": "introduce",
+          "visualIntent": "A character builds a number city where ones become tens and tens become hundreds.",
+          "densityTarget": 0.5,
+          "baseClass": "Scene",
+          "creativeIntent": {
+            "metaphor": "Blocks become buildings in a place-value city.",
+            "reveal": "Loose dots gather into rods and rods gather into a hundred square.",
+            "finalFrame": "243 appears as 2 hundreds, 4 tens, and 3 ones."
+          }
+        },
+        "layout": {
+          "safeArea": { "xMin": -6.5, "xMax": 6.5, "yMin": -3.5, "yMax": 3.5 },
+          "zones": [
+            { "id": "title", "x": 0, "y": 2.8, "width": 11, "height": 0.8, "note": "title" },
+            { "id": "left", "x": -3.8, "y": 0.4, "width": 3.3, "height": 3.8, "note": "hundreds" },
+            { "id": "hero", "x": 0, "y": 0.4, "width": 3.6, "height": 3.8, "note": "tens" },
+            { "id": "right", "x": 3.8, "y": 0.4, "width": 3.3, "height": 3.8, "note": "ones" },
+            { "id": "footer", "x": 0, "y": -2.75, "width": 11, "height": 0.9, "note": "number" }
+          ]
+        },
+        "objects": [
+          { "id": "builder", "kind": "compound.character", "role": "guide", "anchor": { "zone": "right", "align": "bottom", "dx": 0.7, "dy": -0.2 }, "props": { "shape": "gem", "expression": "happy", "pose": "celebrate", "bodyColor": "GRASS", "label": "243", "scale": 0.9 }, "zIndex": 8 },
+          { "id": "hundreds", "kind": "compound.grid_fill", "role": "hundreds_blocks", "anchor": { "zone": "left", "align": "center", "dy": 0.2 }, "props": { "rows": 10, "cols": 10, "highlighted": 100, "cellSize": 0.17, "fillColor": "SKY", "label": "2 hundreds" }, "zIndex": 2 },
+          { "id": "tens", "kind": "compound.grouped_dots", "role": "tens_rods", "anchor": { "zone": "hero", "align": "center", "dy": 0.2 }, "props": { "groups": 4, "perGroup": 10, "dotRadius": 0.045, "spacing": 0.045, "groupSpacing": 0.12, "arrange": "down", "label": "4 tens", "boxed": true }, "zIndex": 2 },
+          { "id": "ones", "kind": "compound.grouped_dots", "role": "ones_blocks", "anchor": { "zone": "right", "align": "top", "dy": -0.35 }, "props": { "groups": 1, "perGroup": 3, "dotRadius": 0.11, "label": "3 ones", "boxed": false, "colors": ["PINK"] }, "zIndex": 3 },
+          { "id": "number", "kind": "compound.equation_ladder", "role": "expanded_form", "anchor": { "zone": "footer", "align": "center" }, "props": { "steps": ["243 = 200 + 40 + 3", "2 hundreds   4 tens   3 ones"], "scale": 0.78 }, "zIndex": 6 }
+        ],
+        "beats": [
+          { "id": "builder_arrives", "narration": "The builder brings us the number 243.", "actions": [{ "type": "show", "targets": ["builder", "hundreds"], "animation": "fade_in", "runTime": 0.8, "stagger": 0.12 }], "holdSeconds": 0.2 },
+          { "id": "hundreds_land", "narration": "The 2 tells us two hundreds.", "actions": [{ "type": "recipe", "recipe": "count_in", "targets": ["hundreds"], "runTime": 1.0 }], "holdSeconds": 0.3 },
+          { "id": "tens_land", "narration": "The 4 tells us four tens.", "actions": [{ "type": "recipe", "recipe": "count_in", "targets": ["tens"], "runTime": 1.0 }], "holdSeconds": 0.3 },
+          { "id": "ones_land", "narration": "The 3 tells us three ones.", "actions": [{ "type": "recipe", "recipe": "count_in", "targets": ["ones"], "runTime": 0.7 }], "holdSeconds": 0.3 },
+          { "id": "expanded_form", "narration": "Together, they build 243.", "actions": [{ "type": "show", "targets": ["number"], "animation": "write", "runTime": 0.9 }, { "type": "recipe", "recipe": "celebrate", "targets": ["builder"], "runTime": 0.6 }], "holdSeconds": 0.8 }
+        ]
+      }
+    },
+    {
+      "prompt": "What is the distributive property? Explain it visually with a relatable real-world example.",
+      "sceneIR": {
+        "metadata": {
+          "sceneId": "gold_distributive_movie_snacks",
+          "role": "introduce",
+          "visualIntent": "A snack stand character splits 3 bags with 4 popcorns and 2 candies each into two simpler products.",
+          "densityTarget": 0.48,
+          "baseClass": "Scene",
+          "creativeIntent": {
+            "metaphor": "A movie snack combo splits into popcorn and candy counts.",
+            "reveal": "Each bag opens into two lanes that preserve the same total.",
+            "finalFrame": "3 x (4 + 2) becomes 3 x 4 + 3 x 2."
+          }
+        },
+        "layout": {
+          "safeArea": { "xMin": -6.5, "xMax": 6.5, "yMin": -3.5, "yMax": 3.5 },
+          "zones": [
+            { "id": "title", "x": 0, "y": 2.8, "width": 11, "height": 0.8, "note": "title" },
+            { "id": "hero", "x": -1.0, "y": 0.5, "width": 7.0, "height": 3.6, "note": "snack bags" },
+            { "id": "right", "x": 4.6, "y": 0.4, "width": 2.6, "height": 3.4, "note": "guide" },
+            { "id": "footer", "x": 0, "y": -2.7, "width": 11, "height": 0.9, "note": "equation" }
+          ]
+        },
+        "objects": [
+          { "id": "cashier", "kind": "compound.character", "role": "guide", "anchor": { "zone": "right", "align": "center" }, "props": { "shape": "circle", "expression": "curious", "pose": "point", "bodyColor": "ORANGE", "label": "split the combo" }, "zIndex": 9 },
+          { "id": "combos", "kind": "compound.grouped_dots", "role": "combo_groups", "anchor": { "zone": "hero", "align": "center", "dy": 0.45 }, "props": { "groups": 3, "perGroup": 6, "colors": ["SUN", "SKY", "SUN"], "dotRadius": 0.09, "spacing": 0.12, "groupSpacing": 0.42, "label": "3 bags of (4 + 2)" }, "zIndex": 2 },
+          { "id": "split_equation", "kind": "compound.equation_ladder", "role": "distributed_equation", "anchor": { "zone": "footer", "align": "center" }, "props": { "steps": ["3(4+2)", "3\\\\times4 + 3\\\\times2", "12 + 6 = 18"], "scale": 0.82 }, "zIndex": 5 }
+        ],
+        "beats": [
+          { "id": "show_combo", "narration": "There are 3 snack bags. Each bag has 4 popcorns plus 2 candies.", "actions": [{ "type": "show", "targets": ["cashier", "combos"], "animation": "fade_in", "runTime": 1.0, "stagger": 0.12 }], "holdSeconds": 0.4 },
+          { "id": "split_groups", "narration": "Distributing means split the inside, but keep the 3 bags.", "actions": [{ "type": "recipe", "recipe": "split", "targets": ["combos"], "runTime": 0.8 }, { "type": "recipe", "recipe": "point", "targets": ["cashier"], "runTime": 0.5 }], "holdSeconds": 0.3 },
+          { "id": "equation_reveal", "narration": "The picture becomes two products added together.", "actions": [{ "type": "show", "targets": ["split_equation"], "animation": "write", "runTime": 1.0 }], "holdSeconds": 0.5 },
+          { "id": "same_total", "narration": "The total snacks never changed.", "actions": [{ "type": "recipe", "recipe": "celebrate", "targets": ["cashier"], "runTime": 0.6 }, { "type": "emphasize", "targets": ["split_equation"], "animation": "circumscribe", "runTime": 0.7 }], "holdSeconds": 0.8 }
+        ]
+      }
+    },
+    {
+      "prompt": "Help students understand the difference between area and perimeter using a rectangular garden example.",
+      "sceneIR": {
+        "metadata": {
+          "sceneId": "gold_area_perimeter_garden",
+          "role": "address_misconception",
+          "visualIntent": "A garden guide traces the fence for perimeter and paints square tiles for area.",
+          "densityTarget": 0.5,
+          "baseClass": "Scene",
+          "creativeIntent": {
+            "metaphor": "A garden has a fence around it and soil tiles inside it.",
+            "reveal": "The outline glows first, then the inside fills with tiles.",
+            "finalFrame": "Perimeter is around; area is inside."
+          }
+        },
+        "layout": {
+          "safeArea": { "xMin": -6.5, "xMax": 6.5, "yMin": -3.5, "yMax": 3.5 },
+          "zones": [
+            { "id": "title", "x": 0, "y": 2.8, "width": 11, "height": 0.8, "note": "title" },
+            { "id": "hero", "x": 0, "y": 0.4, "width": 7.0, "height": 3.8, "note": "garden" },
+            { "id": "left", "x": -4.9, "y": -1.7, "width": 2.0, "height": 1.7, "note": "guide" },
+            { "id": "footer", "x": 0, "y": -2.75, "width": 10.5, "height": 0.8, "note": "takeaway" }
+          ]
+        },
+        "objects": [
+          { "id": "guide", "kind": "compound.character", "role": "garden_guide", "anchor": { "zone": "left", "align": "center" }, "props": { "shape": "star", "expression": "thinking", "pose": "point", "bodyColor": "GRASS", "label": "around or inside?" }, "zIndex": 8 },
+          { "id": "fence", "kind": "compound.trace_path", "role": "perimeter", "anchor": { "zone": "hero", "align": "center", "dy": 0.25 }, "props": { "width": 4.8, "height": 2.5, "strokeColor": "ORANGE", "fillColor": "GRASS", "fillOpacity": 0.12, "label": "perimeter = fence around" }, "zIndex": 2 },
+          { "id": "soil_tiles", "kind": "compound.grid_fill", "role": "area", "anchor": { "zone": "hero", "align": "center", "dy": 0.35 }, "props": { "rows": 4, "cols": 6, "highlighted": 24, "cellSize": 0.34, "fillColor": "GRASS", "label": "area = 24 square meters" }, "relatedTo": ["fence"], "zIndex": 3 },
+          { "id": "takeaway", "kind": "compound.equation_ladder", "role": "takeaway", "anchor": { "zone": "footer", "align": "center" }, "props": { "steps": ["Perimeter: distance around", "Area: space inside"], "scale": 0.75 }, "zIndex": 6 }
+        ],
+        "beats": [
+          { "id": "garden_question", "narration": "A garden has two different measurements.", "actions": [{ "type": "show", "targets": ["guide", "fence"], "animation": "fade_in", "runTime": 0.9, "stagger": 0.1 }], "holdSeconds": 0.3 },
+          { "id": "trace_fence", "narration": "Perimeter follows the fence around the outside.", "actions": [{ "type": "recipe", "recipe": "trace", "targets": ["fence"], "runTime": 1.2 }, { "type": "recipe", "recipe": "point", "targets": ["guide"], "runTime": 0.5 }], "holdSeconds": 0.4 },
+          { "id": "fill_soil", "narration": "Area fills the space inside with square units.", "actions": [{ "type": "recipe", "recipe": "count_in", "targets": ["soil_tiles"], "runTime": 1.1 }], "holdSeconds": 0.4 },
+          { "id": "compare", "narration": "Around and inside are different ideas.", "actions": [{ "type": "show", "targets": ["takeaway"], "animation": "write", "runTime": 0.9 }, { "type": "recipe", "recipe": "celebrate", "targets": ["guide"], "runTime": 0.6 }], "holdSeconds": 0.9 }
+        ]
+      }
+    },
+    {
+      "prompt": "Explain how to convert a fraction into a percentage for 5th-grade students in an intuitive way.",
+      "sceneIR": {
+        "metadata": {
+          "sceneId": "gold_fraction_to_percent_meter",
+          "role": "synthesize",
+          "visualIntent": "A percentage meter fills from 3/5 to 60 out of 100 squares with a character announcer.",
+          "densityTarget": 0.46,
+          "baseClass": "Scene",
+          "creativeIntent": {
+            "metaphor": "A game meter charges from a fraction to a percent.",
+            "reveal": "Three of five bars stretch into sixty of one hundred squares.",
+            "finalFrame": "3/5 = 60/100 = 60%."
+          }
+        },
+        "layout": {
+          "safeArea": { "xMin": -6.5, "xMax": 6.5, "yMin": -3.5, "yMax": 3.5 },
+          "zones": [
+            { "id": "title", "x": 0, "y": 2.8, "width": 11, "height": 0.8, "note": "title" },
+            { "id": "left", "x": -4.2, "y": 0.3, "width": 3.0, "height": 3.6, "note": "fraction" },
+            { "id": "hero", "x": 0.5, "y": 0.3, "width": 5.0, "height": 3.8, "note": "percent grid" },
+            { "id": "right", "x": 4.9, "y": -1.5, "width": 2.0, "height": 1.8, "note": "announcer" },
+            { "id": "footer", "x": 0, "y": -2.75, "width": 10.5, "height": 0.8, "note": "equation" }
+          ]
+        },
+        "objects": [
+          { "id": "announcer", "kind": "compound.character", "role": "guide", "anchor": { "zone": "right", "align": "center" }, "props": { "shape": "star", "expression": "surprised", "pose": "celebrate", "bodyColor": "PINK", "label": "percent!" }, "zIndex": 8 },
+          { "id": "fraction_bars", "kind": "compound.grid_fill", "role": "fraction_model", "anchor": { "zone": "left", "align": "center" }, "props": { "rows": 1, "cols": 5, "highlighted": 3, "cellSize": 0.68, "fillColor": "SKY", "label": "3 out of 5" }, "zIndex": 2 },
+          { "id": "percent_grid", "kind": "compound.percent_grid", "role": "percent_model", "anchor": { "zone": "hero", "align": "center" }, "props": { "highlighted": 60, "cellSize": 0.28 }, "zIndex": 2 },
+          { "id": "equation", "kind": "compound.equation_ladder", "role": "conversion", "anchor": { "zone": "footer", "align": "center" }, "props": { "steps": ["\\\\frac{3}{5}=\\\\frac{60}{100}", "60 out of 100 = 60%"], "scale": 0.78 }, "zIndex": 6 }
+        ],
+        "beats": [
+          { "id": "show_fraction", "narration": "Start with three out of five equal parts.", "actions": [{ "type": "show", "targets": ["announcer", "fraction_bars"], "animation": "fade_in", "runTime": 0.8, "stagger": 0.12 }], "holdSeconds": 0.3 },
+          { "id": "scale_to_100", "narration": "Percent means out of one hundred.", "actions": [{ "type": "show", "targets": ["percent_grid"], "animation": "create", "runTime": 1.0 }, { "type": "recipe", "recipe": "shade", "targets": ["percent_grid"], "props": { "color": "SKY" }, "runTime": 0.6 }], "holdSeconds": 0.4 },
+          { "id": "equation_reveal", "narration": "Three fifths is the same as sixty hundredths.", "actions": [{ "type": "show", "targets": ["equation"], "animation": "write", "runTime": 1.0 }], "holdSeconds": 0.4 },
+          { "id": "celebrate_percent", "narration": "So three fifths is sixty percent.", "actions": [{ "type": "recipe", "recipe": "celebrate", "targets": ["announcer"], "runTime": 0.7 }, { "type": "emphasize", "targets": ["equation"], "animation": "circumscribe", "runTime": 0.7 }], "holdSeconds": 0.8 }
+        ]
+      }
+    }
+  ]
+}

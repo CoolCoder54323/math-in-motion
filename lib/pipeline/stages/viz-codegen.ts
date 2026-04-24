@@ -14,7 +14,8 @@ import {
   buildSceneDesignSystemPrompt,
   buildVizSceneDesignPrompt,
   enrichSceneIR,
-  parseSceneDesignResponse,
+  markFallbackSceneIR,
+  parseSceneDesignResponseWithDiagnostics,
 } from "../scene-design";
 
 type VizCodegenInput = {
@@ -58,13 +59,41 @@ export const vizCodegenStage: PipelineStageHandler<VizCodegenInput, CodegenOutpu
 
     let scene;
     try {
-      const [sceneIR] = parseSceneDesignResponse(response?.text ?? "");
+      const parsed = parseSceneDesignResponseWithDiagnostics(response?.text ?? "");
+      if (parsed.repaired) {
+        writeFileSync(
+          join(context.jobDir, "llm", "viz-codegen-repair.json"),
+          JSON.stringify({ repaired: true, repairNotes: parsed.repairNotes }, null, 2),
+          "utf-8",
+        );
+      }
+      const [sceneIR] = parsed.scenes;
       scene = compileScene(
         normalizeSceneIR(enrichSceneIR(sceneIR), provider.provider),
         "Viz",
       );
-    } catch {
-      scene = compileScene(normalizeSceneIR(buildFallbackVizSceneIR(input), provider.provider), "Viz");
+    } catch (error) {
+      mkdirSync(join(context.jobDir, "errors"), { recursive: true });
+      writeFileSync(
+        join(context.jobDir, "errors", "codegen.json"),
+        JSON.stringify(
+          {
+            layer: "model",
+            code: "model.parse_error",
+            message: error instanceof Error ? error.message : String(error),
+          },
+          null,
+          2,
+        ),
+        "utf-8",
+      );
+      scene = compileScene(
+        normalizeSceneIR(
+          markFallbackSceneIR(buildFallbackVizSceneIR(input), "model.parse_error"),
+          provider.provider,
+        ),
+        "Viz",
+      );
     }
 
     persistCompiledScene(context.jobDir, scene);

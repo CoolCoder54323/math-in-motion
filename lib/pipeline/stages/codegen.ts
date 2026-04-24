@@ -20,7 +20,8 @@ import {
   buildSceneDesignSystemPrompt,
   buildSingleSceneDesignPrompt,
   enrichSceneIR,
-  parseSceneDesignResponse,
+  markFallbackSceneIR,
+  parseSceneDesignResponseWithDiagnostics,
 } from "../scene-design";
 
 type CacheEntry = {
@@ -104,12 +105,39 @@ export async function codegenSingleScene(
     });
     usage = response.usage;
     writeFileSync(join(context.jobDir, "llm", `${scene.sceneId}.codegen.txt`), response.text, "utf-8");
-    const [sceneIR] = parseSceneDesignResponse(response.text);
+    const parsed = parseSceneDesignResponseWithDiagnostics(response.text);
+    if (parsed.repaired) {
+      writeFileSync(
+        join(context.jobDir, "llm", `${scene.sceneId}.codegen-repair.json`),
+        JSON.stringify({ repaired: true, repairNotes: parsed.repairNotes }, null, 2),
+        "utf-8",
+      );
+    }
+    const [sceneIR] = parsed.scenes;
     generatedScene = compileScene(
       normalizeSceneIR(enrichSceneIR(sceneIR), provider.provider),
     );
-  } catch {
-    generatedScene = compileScene(normalizeSceneIR(buildFallbackSceneIR(scene, plan.title), provider.provider));
+  } catch (error) {
+    mkdirSync(join(context.jobDir, "errors"), { recursive: true });
+    writeFileSync(
+      join(context.jobDir, "errors", `${scene.sceneId}.codegen.json`),
+      JSON.stringify(
+        {
+          layer: "model",
+          code: "model.parse_error",
+          message: error instanceof Error ? error.message : String(error),
+        },
+        null,
+        2,
+      ),
+      "utf-8",
+    );
+    generatedScene = compileScene(
+      normalizeSceneIR(
+        markFallbackSceneIR(buildFallbackSceneIR(scene, plan.title), "model.parse_error"),
+        provider.provider,
+      ),
+    );
   }
 
   persistCompiledScene(context.jobDir, generatedScene);
@@ -190,7 +218,15 @@ export const codegenStage: PipelineStageHandler<CodegenInput, CodegenOutput> = {
 
     let scenes: GeneratedScene[];
     try {
-      const designed = parseSceneDesignResponse(raw);
+      const parsed = parseSceneDesignResponseWithDiagnostics(raw);
+      if (parsed.repaired) {
+        writeFileSync(
+          join(context.jobDir, "llm", "lesson-codegen-repair.json"),
+          JSON.stringify({ repaired: true, repairNotes: parsed.repairNotes }, null, 2),
+          "utf-8",
+        );
+      }
+      const designed = parsed.scenes;
       const bySceneId = new Map(
         designed.map((sceneIR) => [
           sceneIR.metadata.sceneId,
@@ -203,9 +239,28 @@ export const codegenStage: PipelineStageHandler<CodegenInput, CodegenOutput> = {
             ?? normalizeSceneIR(buildFallbackSceneIR(scene, plan.title), provider.provider),
         ),
       );
-    } catch {
+    } catch (error) {
+      mkdirSync(join(context.jobDir, "errors"), { recursive: true });
+      writeFileSync(
+        join(context.jobDir, "errors", "lesson-codegen.json"),
+        JSON.stringify(
+          {
+            layer: "model",
+            code: "model.parse_error",
+            message: error instanceof Error ? error.message : String(error),
+          },
+          null,
+          2,
+        ),
+        "utf-8",
+      );
       scenes = plan.sceneBreakdown.map((scene) =>
-        compileScene(normalizeSceneIR(buildFallbackSceneIR(scene, plan.title), provider.provider)),
+        compileScene(
+          normalizeSceneIR(
+            markFallbackSceneIR(buildFallbackSceneIR(scene, plan.title), "model.parse_error"),
+            provider.provider,
+          ),
+        ),
       );
     }
 

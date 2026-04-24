@@ -56,6 +56,22 @@ function compoundHint(spec: SceneIRObject): string {
       return "Callout card with title and body";
     case "compound.asset_stage":
       return "Asset-led stage area with caption";
+    case "compound.number_line_walk":
+      return "Number-line walk with start/end markers and jump arc";
+    case "compound.grouped_dots":
+      return "Grouped dots model for arrays and multiplication";
+    case "compound.split_shape":
+      return "Shape split into equal parts with highlighted portion";
+    case "compound.trace_path":
+      return "Path that can be traced to show distance around";
+    case "compound.grid_fill":
+      return "Area/grid fill model";
+    case "compound.equation_ladder":
+      return "Step-by-step equation ladder";
+    case "compound.story_stage":
+      return "Small story stage with character and caption";
+    case "compound.character":
+      return "Expressive reusable character with pose and emotion props";
     default:
       return spec.kind;
   }
@@ -79,6 +95,8 @@ function actionHint(action: SceneIRAction): string {
       return `wait ${action.seconds}s`;
     case "custom":
       return `custom ${action.block}`;
+    case "recipe":
+      return `recipe ${action.recipe}`;
   }
 }
 
@@ -107,6 +125,7 @@ export function getManimKitPython(): string {
 import numpy as np
 import json
 import os
+import re
 from pathlib import Path
 
 BG = "#FFF4D6"
@@ -123,19 +142,133 @@ config.background_color = BG
 
 DEFAULT_SAFE_AREA = {"xMin": -6.5, "xMax": 6.5, "yMin": -3.5, "yMax": 3.5}
 
+PROP_ALIASES = {
+    "fontSize": "font_size",
+    "fillOpacity": "fill_opacity",
+    "fillColor": "fill_color",
+    "strokeWidth": "stroke_width",
+    "strokeColor": "stroke_color",
+    "startAngle": "start_angle",
+    "endAngle": "end_angle",
+    "xRange": "x_range",
+    "includeNumbers": "include_numbers",
+    "includeTicks": "include_ticks",
+    "numbersToInclude": "numbers_to_include",
+    "cellSize": "cell_size",
+}
+
+def symbol_value(value):
+    if isinstance(value, str):
+        symbols = {
+            "PI": PI,
+            "TAU": TAU,
+            "UP": UP,
+            "DOWN": DOWN,
+            "LEFT": LEFT,
+            "RIGHT": RIGHT,
+            "ORIGIN": ORIGIN,
+            "WHITE": WHITE,
+            "BLACK": BLACK,
+            "BLUE": BLUE,
+            "GREEN": GREEN,
+            "RED": RED,
+            "YELLOW": YELLOW,
+            "PURPLE": PURPLE,
+            "ORANGE": ORANGE,
+            "PINK": PINK,
+            "GRAY": GRAY,
+            "GREY": GRAY,
+            "SKY": SKY,
+            "GRASS": GRASS,
+            "SUN": SUN,
+            "GRAPE": GRAPE,
+            "INK": INK,
+            "PANEL_BG": PANEL_BG,
+            "RED_ACCENT": RED_ACCENT,
+        }
+        return symbols.get(value, value)
+    return value
+
+def compat_props(props):
+    result = {}
+    for key, value in (props or {}).items():
+        resolved = symbol_value(value)
+        result[key] = resolved
+        alias = PROP_ALIASES.get(key)
+        if alias:
+            result[alias] = resolved
+    return result
+
 def T(s, size=40, color=INK):
     return Text(str(s), font_size=size, color=color, weight=BOLD)
 
+def readable_math_text(value):
+    text = str(value)
+    text = re.sub(r"\\\\frac\\{([^{}]+)\\}\\{([^{}]+)\\}", r"\\1/\\2", text)
+    text = text.replace("\\\\times", "×")
+    text = text.replace("\\\\cdot", "·")
+    text = text.replace("\\\\text{", "").replace("}", "")
+    text = text.replace("\\\\", "")
+    return text
+
 def build_mascot():
-    body = Circle(radius=0.25, fill_color=SKY, fill_opacity=1, stroke_width=0)
-    eye1 = Dot(color=INK).scale(0.6).move_to(body.get_center() + UP * 0.08 + LEFT * 0.08)
-    eye2 = Dot(color=INK).scale(0.6).move_to(body.get_center() + UP * 0.08 + RIGHT * 0.08)
-    smile = ArcBetweenPoints(
-        body.get_center() + LEFT * 0.1 + DOWN * 0.05,
-        body.get_center() + RIGHT * 0.1 + DOWN * 0.05,
-        angle=-PI / 3,
-    )
-    return VGroup(body, eye1, eye2, smile)
+    return build_character({"shape": "star", "expression": "happy", "bodyColor": SUN, "scale": 0.8})
+
+def build_character(props=None):
+    props = compat_props(props or {})
+    shape = props.get("shape", "star")
+    expression = props.get("expression", "happy")
+    pose = props.get("pose", "neutral")
+    body_color = symbol_value(props.get("bodyColor", SUN))
+    accent_color = symbol_value(props.get("accentColor", SKY))
+    stroke_color = symbol_value(props.get("strokeColor", INK))
+    scale = props.get("scale", 1.0)
+
+    if shape == "circle":
+        body = Circle(radius=0.48, color=stroke_color, stroke_width=3)
+        body.set_fill(body_color, opacity=1)
+    elif shape == "gem":
+        body = RegularPolygon(n=6, radius=0.52, color=stroke_color, stroke_width=3)
+        body.set_fill(body_color, opacity=1)
+    else:
+        body = Star(n=5, outer_radius=0.58, inner_radius=0.26, color=stroke_color, stroke_width=3)
+        body.set_fill(body_color, opacity=1)
+
+    eye_y = 0.10
+    eye_dx = 0.13
+    if expression == "curious":
+        left_eye = Circle(radius=0.045, color=stroke_color, stroke_width=2).move_to(body.get_center() + LEFT * eye_dx + UP * eye_y)
+        right_eye = Dot(radius=0.04, color=stroke_color).move_to(body.get_center() + RIGHT * eye_dx + UP * (eye_y + 0.02))
+    elif expression == "surprised":
+        left_eye = Circle(radius=0.045, color=stroke_color, stroke_width=2).move_to(body.get_center() + LEFT * eye_dx + UP * eye_y)
+        right_eye = Circle(radius=0.045, color=stroke_color, stroke_width=2).move_to(body.get_center() + RIGHT * eye_dx + UP * eye_y)
+    else:
+        left_eye = Dot(radius=0.045, color=stroke_color).move_to(body.get_center() + LEFT * eye_dx + UP * eye_y)
+        right_eye = Dot(radius=0.045, color=stroke_color).move_to(body.get_center() + RIGHT * eye_dx + UP * eye_y)
+
+    if expression == "surprised":
+        mouth = Circle(radius=0.055, color=stroke_color, stroke_width=3).move_to(body.get_center() + DOWN * 0.08)
+    elif expression == "thinking":
+        mouth = Line(LEFT * 0.08, RIGHT * 0.08, color=stroke_color, stroke_width=3).move_to(body.get_center() + DOWN * 0.10)
+    else:
+        mouth = Arc(radius=0.13, start_angle=PI + 0.35, angle=PI - 0.7, color=stroke_color, stroke_width=3).move_to(body.get_center() + DOWN * 0.05)
+
+    left_arm = Line(LEFT * 0.35, LEFT * 0.72 + DOWN * 0.02, color=stroke_color, stroke_width=4)
+    right_target = RIGHT * 0.72 + (UP * 0.20 if pose in {"point", "celebrate"} else DOWN * 0.02)
+    right_arm = Line(RIGHT * 0.35, right_target, color=stroke_color, stroke_width=4)
+    left_arm.move_to(body.get_center() + LEFT * 0.47)
+    right_arm.move_to(body.get_center() + RIGHT * 0.47)
+    sparkle = Star(n=4, outer_radius=0.12, inner_radius=0.05, color=accent_color, fill_opacity=1, stroke_width=0)
+    sparkle.move_to(body.get_center() + RIGHT * 0.68 + UP * 0.45)
+    parts = [left_arm, right_arm, body, left_eye, right_eye, mouth]
+    if pose == "celebrate":
+        parts.append(sparkle)
+    character = VGroup(*parts).scale(scale)
+    if props.get("label"):
+        label = T(props.get("label"), size=props.get("labelSize", 22), color=stroke_color)
+        label.next_to(character, DOWN, buff=0.18)
+        character = VGroup(character, label)
+    return character
 
 class RuntimeSceneProxy:
     def __init__(self, scene, registry):
@@ -178,6 +311,10 @@ class SceneRuntime:
             "registry": self.registry,
             "np": np,
             "T": T,
+            "RuntimeSceneProxy": RuntimeSceneProxy,
+            "compat_props": compat_props,
+            "symbol_value": symbol_value,
+            "readable_math_text": readable_math_text,
             "build_mascot": build_mascot,
             "BG": BG,
             "INK": INK,
@@ -189,12 +326,25 @@ class SceneRuntime:
             "ORANGE": ORANGE,
             "PANEL_BG": PANEL_BG,
             "RED_ACCENT": RED_ACCENT,
+            "WHITE": WHITE,
+            "BLACK": BLACK,
+            "BLUE": BLUE,
+            "GREEN": GREEN,
+            "RED": RED,
+            "YELLOW": YELLOW,
+            "PURPLE": PURPLE,
+            "GRAY": GRAY,
+            "GREY": GRAY,
             "Text": Text,
             "MathTex": MathTex,
             "Circle": Circle,
+            "Arc": Arc,
+            "Sector": Sector,
             "Square": Square,
             "Rectangle": Rectangle,
             "RoundedRectangle": RoundedRectangle,
+            "Star": Star,
+            "RegularPolygon": RegularPolygon,
             "VGroup": VGroup,
             "Group": Group,
             "Dot": Dot,
@@ -214,12 +364,16 @@ class SceneRuntime:
             "Indicate": Indicate,
             "Circumscribe": Circumscribe,
             "LaggedStart": LaggedStart,
+            "GrowFromCenter": GrowFromCenter,
+            "GrowArrow": GrowArrow,
+            "Uncreate": Uncreate,
             "UP": UP,
             "DOWN": DOWN,
             "LEFT": LEFT,
             "RIGHT": RIGHT,
             "ORIGIN": ORIGIN,
             "PI": PI,
+            "TAU": TAU,
         }
         self._install_custom_blocks()
 
@@ -304,6 +458,25 @@ class SceneRuntime:
         except Exception:
             return default
 
+    def _color(self, value, default=INK):
+        resolved = symbol_value(value)
+        return resolved if resolved is not None else default
+
+    def _text_color(self, value, default=INK):
+        if isinstance(value, str) and value.upper() in {"WHITE", "YELLOW", "GRAY", "GREY"}:
+            return default
+        resolved = self._color(value, default)
+        try:
+            if resolved in {WHITE, YELLOW, GRAY}:
+                return default
+        except Exception:
+            pass
+        return resolved
+
+    def _direction(self, value, default=DOWN):
+        resolved = symbol_value(value)
+        return resolved if resolved is not None else default
+
     def _safe_font_size(self, mob):
         try:
             value = getattr(mob, "font_size", None)
@@ -331,45 +504,46 @@ class SceneRuntime:
 
     def build_object(self, spec):
         kind = spec["kind"]
-        props = spec.get("props") or {}
+        props = compat_props(spec.get("props") or {})
         mob = None
         if kind == "text":
-            mob = T(props.get("text", ""), size=props.get("fontSize", 40), color=props.get("color", INK))
+            mob = T(props.get("text", ""), size=props.get("fontSize", props.get("font_size", 40)), color=self._text_color(props.get("color"), INK))
         elif kind == "math":
-            mob = MathTex(props.get("tex", ""), color=props.get("color", INK))
+            text = readable_math_text(props.get("tex", props.get("texString", props.get("tex_string", ""))))
+            mob = T(text, size=props.get("fontSize", props.get("font_size", 36)), color=self._text_color(props.get("color"), INK))
             if props.get("scale"):
                 mob.scale(props.get("scale"))
         elif kind == "rectangle":
             mob = Rectangle(
                 width=props.get("width", 2.4),
                 height=props.get("height", 1.4),
-                color=props.get("strokeColor", INK),
+                color=self._color(props.get("strokeColor"), INK),
             )
-            mob.set_fill(props.get("fillColor", PANEL_BG), opacity=props.get("fillOpacity", 0.75))
+            mob.set_fill(self._color(props.get("fillColor"), PANEL_BG), opacity=props.get("fillOpacity", 0.75))
         elif kind == "rounded_rect":
             mob = RoundedRectangle(
                 width=props.get("width", 2.4),
                 height=props.get("height", 1.4),
                 corner_radius=props.get("cornerRadius", 0.18),
-                color=props.get("strokeColor", INK),
+                color=self._color(props.get("strokeColor"), INK),
             )
-            mob.set_fill(props.get("fillColor", PANEL_BG), opacity=props.get("fillOpacity", 0.75))
+            mob.set_fill(self._color(props.get("fillColor"), PANEL_BG), opacity=props.get("fillOpacity", 0.75))
         elif kind == "circle":
-            mob = Circle(radius=props.get("radius", 0.9), color=props.get("strokeColor", INK))
-            mob.set_fill(props.get("fillColor", SKY), opacity=props.get("fillOpacity", 0.2))
+            mob = Circle(radius=props.get("radius", 0.9), color=self._color(props.get("strokeColor", props.get("color")), INK))
+            mob.set_fill(self._color(props.get("fillColor", props.get("color")), SKY), opacity=props.get("fillOpacity", 0.2))
         elif kind == "dot":
-            mob = Dot(radius=props.get("radius", 0.08), color=props.get("color", INK))
+            mob = Dot(radius=props.get("radius", 0.08), color=self._color(props.get("color"), INK))
         elif kind == "line":
             mob = Line(
                 self._point3(props.get("start"), LEFT),
                 self._point3(props.get("end"), RIGHT),
-                color=props.get("color", INK),
+                color=self._color(props.get("color"), INK),
             )
         elif kind == "arrow":
             mob = Arrow(
                 self._point3(props.get("start"), LEFT),
                 self._point3(props.get("end"), RIGHT),
-                color=props.get("color", ORANGE),
+                color=self._color(props.get("color"), ORANGE),
                 buff=props.get("buff", 0.2),
             )
         elif kind == "brace":
@@ -379,7 +553,14 @@ class SceneRuntime:
             mob = Brace(self.get(target_id), direction=direction)
         elif kind == "number_line":
             x_range = props.get("xRange", [0, 10, 1])
-            mob = NumberLine(x_range=x_range, length=props.get("length", 6), color=props.get("color", INK))
+            if len(x_range) == 2:
+                x_range = [x_range[0], x_range[1], 1]
+            mob = NumberLine(
+                x_range=x_range,
+                length=props.get("length", 6),
+                color=self._color(props.get("color"), INK),
+                include_numbers=props.get("includeNumbers", True),
+            )
         elif kind == "compound.callout_card":
             title = T(props.get("title", ""), size=props.get("titleSize", 28), color=props.get("titleColor", INK))
             body = T(props.get("body", ""), size=props.get("bodySize", 22), color=props.get("bodyColor", INK))
@@ -479,6 +660,156 @@ class SceneRuntime:
             right_group = VGroup(right_box, VGroup(right, right_body).move_to(right_box.get_center()))
 
             mob = VGroup(wrong_group, right_group).arrange(RIGHT, buff=0.45)
+        elif kind == "compound.grouped_dots":
+            groups = max(int(props.get("groups", props.get("rows", 3))), 1)
+            per_group = max(int(props.get("perGroup", props.get("cols", 3))), 1)
+            dot_radius = props.get("dotRadius", 0.13)
+            spacing = props.get("spacing", 0.28)
+            group_spacing = props.get("groupSpacing", 0.55)
+            palette = props.get("colors") or [SKY, GRASS, SUN, PINK, GRAPE, ORANGE]
+            highlight_group = props.get("highlightGroup")
+            highlight_color = self._color(props.get("highlightColor"), SUN)
+            rows = []
+            for group_index in range(groups):
+                color = self._color(palette[group_index % len(palette)], SKY)
+                if highlight_group is not None and int(highlight_group) == group_index:
+                    color = highlight_color
+                dots = VGroup(*[Dot(radius=dot_radius, color=color) for _ in range(per_group)])
+                dots.arrange(RIGHT, buff=spacing)
+                if props.get("boxed", True):
+                    box = RoundedRectangle(
+                        width=max(1.0, dots.width + 0.35),
+                        height=max(0.7, dots.height + 0.35),
+                        corner_radius=0.12,
+                        color=color,
+                    )
+                    box.set_fill(color, opacity=0.12)
+                    dots.move_to(box.get_center())
+                    rows.append(VGroup(box, dots))
+                else:
+                    rows.append(dots)
+            direction = DOWN if props.get("arrange", "right") == "down" else RIGHT
+            mob = VGroup(*rows).arrange(direction, buff=group_spacing)
+            if props.get("label"):
+                label = T(props.get("label"), size=props.get("labelSize", 26), color=self._color(props.get("labelColor"), INK))
+                label.next_to(mob, DOWN, buff=0.28)
+                mob = VGroup(mob, label)
+        elif kind == "compound.number_line_walk":
+            start = float(props.get("start", 0))
+            end = float(props.get("end", 10))
+            step = float(props.get("step", 1))
+            from_value = float(props.get("from", start))
+            to_value = float(props.get("to", end))
+            x_range = props.get("xRange") or [start, end, step]
+            if len(x_range) == 2:
+                x_range = [x_range[0], x_range[1], step]
+            line = NumberLine(
+                x_range=x_range,
+                length=props.get("length", 8),
+                color=self._color(props.get("lineColor", props.get("color")), INK),
+                include_numbers=props.get("includeNumbers", True),
+            )
+            start_dot = Dot(line.n2p(from_value), radius=props.get("dotRadius", 0.12), color=self._color(props.get("startColor"), SKY))
+            end_dot = Dot(line.n2p(to_value), radius=props.get("dotRadius", 0.12), color=self._color(props.get("endColor"), GRASS))
+            label = T(props.get("label", f"{from_value:g} to {to_value:g}"), size=props.get("labelSize", 26), color=self._color(props.get("labelColor"), INK))
+            label.next_to(line, DOWN, buff=0.35)
+            arc_height = props.get("arcHeight", 0.7)
+            arc = ArcBetweenPoints(line.n2p(from_value), line.n2p(to_value), angle=-PI / 2 if to_value < from_value else PI / 2)
+            arc.set_color(self._color(props.get("arcColor"), ORANGE))
+            arc.shift(UP * arc_height * 0.15)
+            mob = VGroup(line, arc, start_dot, end_dot, label)
+        elif kind == "compound.split_shape":
+            parts = max(int(props.get("parts", props.get("splitCount", 2))), 1)
+            if props.get("highlighted") is not None:
+                highlighted = max(int(props.get("highlighted")), 0)
+            elif props.get("highlightIndex") is not None:
+                highlighted = max(int(props.get("highlightIndex")) + 1, 0)
+            else:
+                highlighted = 1
+            shape = props.get("shape", "circle")
+            fill_color = self._color(props.get("highlightColor", props.get("fillColor", props.get("color"))), SKY)
+            empty_color = self._color(props.get("emptyColor"), PANEL_BG)
+            stroke_color = self._color(props.get("strokeColor"), INK)
+            fill_opacity = props.get("highlightOpacity", props.get("fillOpacity", 0.9))
+            pieces = []
+            if shape == "rectangle":
+                width = props.get("width", 4.0)
+                height = props.get("height", 2.0)
+                for index in range(parts):
+                    piece = Rectangle(width=width / parts, height=height, color=stroke_color, stroke_width=2)
+                    piece.set_fill(fill_color if index < highlighted else empty_color, opacity=fill_opacity if index < highlighted else 0.45)
+                    piece.move_to(RIGHT * ((index - (parts - 1) / 2) * width / parts))
+                    pieces.append(piece)
+            else:
+                radius = props.get("radius", 1.45)
+                for index in range(parts):
+                    piece = Sector(
+                        radius=radius,
+                        start_angle=index * TAU / parts,
+                        angle=TAU / parts,
+                        color=stroke_color,
+                        stroke_width=2,
+                    )
+                    piece.set_fill(fill_color if index < highlighted else empty_color, opacity=fill_opacity if index < highlighted else 0.45)
+                    pieces.append(piece)
+            visual = VGroup(*pieces)
+            label_text = readable_math_text(props.get("label", props.get("labelTex", rf"\\frac{{{highlighted}}}{{{parts}}}")))
+            label = T(label_text, size=props.get("labelSize", 30), color=self._text_color(props.get("labelColor"), INK)).scale(props.get("labelScale", 1.0))
+            label.next_to(visual, DOWN, buff=0.3)
+            mob = VGroup(visual, label)
+        elif kind == "compound.trace_path":
+            width = props.get("width", 4.0)
+            height = props.get("height", 2.4)
+            rect = RoundedRectangle(width=width, height=height, corner_radius=props.get("cornerRadius", 0.08), color=self._color(props.get("strokeColor"), ORANGE))
+            rect.set_fill(self._color(props.get("fillColor"), PANEL_BG), opacity=props.get("fillOpacity", 0.1))
+            label = T(props.get("label", "trace the path"), size=props.get("labelSize", 24), color=self._color(props.get("labelColor"), INK))
+            label.next_to(rect, DOWN, buff=0.25)
+            mob = VGroup(rect, label)
+        elif kind == "compound.grid_fill":
+            rows = max(int(props.get("rows", 4)), 1)
+            cols = max(int(props.get("cols", 6)), 1)
+            highlighted = max(int(props.get("highlighted", rows * cols)), 0)
+            cell = props.get("cellSize", 0.42)
+            cells = []
+            for row in range(rows):
+                for col in range(cols):
+                    index = row * cols + col
+                    square = Square(side_length=cell, color=self._color(props.get("strokeColor"), INK), stroke_width=1.5)
+                    square.set_fill(self._color(props.get("fillColor"), GRASS) if index < highlighted else PANEL_BG, opacity=0.82)
+                    square.move_to(np.array([(col - (cols - 1) / 2) * (cell + 0.04), ((rows - 1) / 2 - row) * (cell + 0.04), 0]))
+                    cells.append(square)
+            grid = VGroup(*cells)
+            if props.get("label"):
+                label = T(props.get("label"), size=props.get("labelSize", 24), color=self._color(props.get("labelColor"), INK))
+                label.next_to(grid, DOWN, buff=0.25)
+                mob = VGroup(grid, label)
+            else:
+                mob = grid
+        elif kind == "compound.equation_ladder":
+            steps = props.get("steps") or []
+            if not steps:
+                steps = [props.get("equation", "")]
+            lines = VGroup(*[
+                T(readable_math_text(step), size=props.get("fontSize", 28), color=self._color(props.get("color"), INK)).scale(props.get("scale", 0.85))
+                for step in steps
+            ]).arrange(DOWN, aligned_edge=LEFT, buff=props.get("buff", 0.28))
+            mob = lines
+        elif kind == "compound.story_stage":
+            title = T(props.get("title", ""), size=props.get("titleSize", 30), color=self._color(props.get("titleColor"), INK))
+            actor = build_character({
+                "shape": props.get("characterShape", "star"),
+                "expression": props.get("expression", "happy"),
+                "pose": props.get("pose", "point"),
+                "bodyColor": props.get("bodyColor", SUN),
+                "accentColor": props.get("accentColor", SKY),
+                "scale": props.get("actorScale", 1.4),
+            })
+            caption = T(props.get("caption", ""), size=props.get("captionSize", 23), color=self._color(props.get("captionColor"), INK))
+            row = VGroup(actor, caption).arrange(RIGHT, buff=0.35)
+            row.next_to(title, DOWN, buff=0.25)
+            mob = VGroup(title, row)
+        elif kind == "compound.character":
+            mob = build_character(props)
         elif kind.startswith("custom.factory."):
             factory_name = kind.split(".", 2)[2]
             if factory_name not in self.namespace:
@@ -583,7 +914,16 @@ class SceneRuntime:
             self._play(*animations, run_time=action.get("runTime"))
             self.time_cursor += action.get("runTime") or 0.5
         elif action_type == "highlight":
-            animations = [self.get(target_id).animate.set_color(action["color"]) for target_id in action["targets"]]
+            if action.get("color"):
+                animations = [
+                    self.get(target_id).animate.set_color(self._color(action.get("color"), ORANGE))
+                    for target_id in action["targets"]
+                ]
+            else:
+                animations = [
+                    Circumscribe(self.get(target_id), color=ORANGE)
+                    for target_id in action["targets"]
+                ]
             self._play(*animations, run_time=action.get("runTime"))
             self.time_cursor += action.get("runTime") or 0.4
         elif action_type == "move":
@@ -607,6 +947,99 @@ class SceneRuntime:
             else:
                 raise ValueError(f"Unknown custom block: {block_id}")
             self.time_cursor += action.get("runTime") or 0.4
+        elif action_type == "recipe":
+            self.run_recipe(action)
+
+    def run_recipe(self, action):
+        recipe = action.get("recipe", "")
+        targets = action.get("targets") or []
+        props = compat_props(action.get("props") or {})
+        run_time = action.get("runTime") or props.get("runTime")
+        if recipe == "count_in":
+            mobs = [self.get(target_id) for target_id in targets]
+            self.ensure_objects_added(targets)
+            animations = []
+            for mob in mobs:
+                children = list(mob) if hasattr(mob, "__iter__") else [mob]
+                animations.extend([FadeIn(child, scale=0.92) for child in children])
+            self._play(LaggedStart(*animations, lag_ratio=props.get("stagger", 0.08)), run_time=run_time or 1.2)
+            self.visible.update(targets)
+            self.time_cursor += run_time or 1.2
+        elif recipe == "trace":
+            mobs = [self.get(target_id) for target_id in targets]
+            self.ensure_objects_added(targets)
+            self._play(*[Create(mob) for mob in mobs], run_time=run_time or 1.0)
+            self.visible.update(targets)
+            self.time_cursor += run_time or 1.0
+        elif recipe == "shade":
+            color = self._color(props.get("color"), SUN)
+            opacity = props.get("opacity", 0.65)
+            animations = []
+            for target_id in targets:
+                mob = self.get(target_id)
+                animations.append(mob.animate.set_fill(color, opacity=opacity))
+            self._play(*animations, run_time=run_time or 0.7)
+            self.visible.update(targets)
+            self.time_cursor += run_time or 0.7
+        elif recipe == "jump":
+            if not targets:
+                return
+            mob = self.get(targets[0])
+            self.ensure_objects_added([targets[0]])
+            point = None
+            if props.get("to"):
+                point = self._point3(props.get("to"), mob.get_center())
+            elif props.get("anchor"):
+                point = self.resolve_anchor(props.get("anchor"))
+            if point is not None:
+                self._play(mob.animate.move_to(point), run_time=run_time or 0.8)
+            else:
+                self._play(Indicate(mob, color=self._color(props.get("color"), ORANGE)), run_time=run_time or 0.6)
+            self.visible.add(targets[0])
+            self.time_cursor += run_time or 0.8
+        elif recipe == "gather":
+            point = self.resolve_anchor(props.get("anchor")) if props.get("anchor") else ORIGIN
+            animations = [self.get(target_id).animate.move_to(point) for target_id in targets]
+            self._play(*animations, run_time=run_time or 0.9)
+            self.visible.update(targets)
+            self.time_cursor += run_time or 0.9
+        elif recipe == "split":
+            mobs = [self.get(target_id) for target_id in targets]
+            self.ensure_objects_added(targets)
+            self._play(*[Circumscribe(mob, color=self._color(props.get("color"), ORANGE)) for mob in mobs], run_time=run_time or 0.8)
+            self.visible.update(targets)
+            self.time_cursor += run_time or 0.8
+        elif recipe == "morph_to_equation" and len(targets) >= 2:
+            source = self.get(targets[0])
+            target = self.get(targets[1])
+            self.ensure_objects_added(targets)
+            self._play(ReplacementTransform(source, target), run_time=run_time or 1.0)
+            self.visible.discard(targets[0])
+            self.visible.add(targets[1])
+            self.time_cursor += run_time or 1.0
+        elif recipe == "camera_focus":
+            if hasattr(self.scene, "camera") and hasattr(self.scene.camera, "frame") and targets:
+                mob = self.get(targets[0])
+                self._play(self.scene.camera.frame.animate.move_to(mob).set(width=max(mob.width * 1.8, 4)), run_time=run_time or 0.8)
+            else:
+                self.scene.wait(run_time or 0.4)
+            self.time_cursor += run_time or 0.8
+        elif recipe in {"bounce", "nod", "celebrate", "point"}:
+            mobs = [self.get(target_id) for target_id in targets]
+            self.ensure_objects_added(targets)
+            if recipe == "point":
+                self._play(*[Indicate(mob, color=self._color(props.get("color"), ORANGE)) for mob in mobs], run_time=run_time or 0.6)
+                self.time_cursor += run_time or 0.6
+            else:
+                distance = props.get("distance", 0.18 if recipe != "celebrate" else 0.28)
+                cycles = int(props.get("cycles", 1 if recipe != "celebrate" else 2))
+                for _ in range(max(cycles, 1)):
+                    self._play(*[mob.animate.shift(UP * distance) for mob in mobs], run_time=(run_time or 0.4) / 2)
+                    self._play(*[mob.animate.shift(DOWN * distance) for mob in mobs], run_time=(run_time or 0.4) / 2)
+                self.time_cursor += (run_time or 0.4) * max(cycles, 1)
+        else:
+            self.scene.wait(run_time or 0.3)
+            self.time_cursor += run_time or 0.3
 
     def snapshot(self, beat_id):
         rows = []
@@ -699,28 +1132,11 @@ ${indentPython(rawConstruct, 8)}
 `;
   }
 
-  const blocks = sceneIR.customBlocks ?? {};
-  const helpers = blocks.helpers?.trim() ?? "";
-  const rawFactories = blocks.objectFactories?.length
-    ? blocks.objectFactories.map((entry) => normalizeObjectFactoryBlock(entry.id, entry.code)).join("\n\n")
-    : "";
-  const rawTimeline = blocks.timeline?.length
-    ? blocks.timeline.map((entry) => normalizeTimelineBlock(entry.id, entry.code)).join("\n\n")
-    : "";
-  const rawUpdaters = blocks.updaters?.length
-    ? blocks.updaters.map((entry) => entry.code.trim()).join("\n\n")
-    : "";
-
   return `from manim import *
 import numpy as np
 from manim_kit import *
 
 SCENE_IR = ${toPython(sceneIR)}
-
-${helpers}
-${helpers && rawFactories ? "\n" : ""}${rawFactories}
-${(helpers || rawFactories) && rawTimeline ? "\n" : ""}${rawTimeline}
-${(helpers || rawFactories || rawTimeline) && rawUpdaters ? "\n" : ""}${rawUpdaters}
 
 ${blueprintComment}
 
@@ -740,66 +1156,6 @@ function indentPython(source: string, spaces: number): string {
     .split("\n")
     .map((line) => (line.trim().length === 0 ? line : `${indent}${line}`))
     .join("\n");
-}
-
-function normalizeTimelineBlock(blockId: string, source: string): string {
-  const trimmed = source.trim();
-  if (!trimmed) return "";
-  if (/^\s*def\s+[A-Za-z_][A-Za-z0-9_]*\s*\(/m.test(trimmed)) {
-    return trimmed;
-  }
-
-  const fnName = blockId.replace(/[^A-Za-z0-9_]/g, "_") || "timeline_block";
-  return [
-    `def ${fnName}(runtime):`,
-    "    scene = runtime.scene",
-    "    self = scene",
-    "    objects = runtime.registry",
-    "    runtime.objects = runtime.registry",
-    "    self.objects = runtime.registry",
-    "    for object_id, mob in runtime.registry.items():",
-    "        setattr(self, object_id, mob)",
-    indentPython(trimmed, 4),
-  ].join("\n");
-}
-
-function normalizeObjectFactoryBlock(blockId: string, source: string): string {
-  const trimmed = source.trim();
-  if (!trimmed) return "";
-
-  const fnName = blockId.replace(/[^A-Za-z0-9_]/g, "_") || "object_factory";
-  const exactFactoryPattern = new RegExp(`^\\s*def\\s+${fnName}\\s*\\(`, "m");
-  if (exactFactoryPattern.test(trimmed)) {
-    return trimmed;
-  }
-
-  const definedFunctions = Array.from(trimmed.matchAll(/^\s*def\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(/gm));
-  if (definedFunctions.length > 0) {
-    const firstHelper = definedFunctions[0]?.[1];
-    return [
-      trimmed,
-      "",
-      `def ${fnName}(runtime, spec):`,
-      "    scene = runtime.scene",
-      "    self = RuntimeSceneProxy(scene, runtime.registry)",
-      "    props = spec.get(\"props\") or {}",
-      `    helper = ${firstHelper}`,
-      "    argc = getattr(getattr(helper, \"__code__\", None), \"co_argcount\", 0)",
-      "    if argc >= 2:",
-      "        return helper(scene, props)",
-      "    if argc == 1:",
-      "        return helper(scene)",
-      "    return helper()",
-    ].join("\n");
-  }
-
-  return [
-    `def ${fnName}(runtime, spec):`,
-    "    scene = runtime.scene",
-    "    self = RuntimeSceneProxy(scene, runtime.registry)",
-    "    props = spec.get(\"props\") or {}",
-    indentPython(trimmed, 4),
-  ].join("\n");
 }
 
 export function normalizeAnchor(anchor?: SceneIRAnchor): SceneIRAnchor | undefined {

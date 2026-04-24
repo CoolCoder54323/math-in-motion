@@ -132,7 +132,7 @@ function checkSceneIR(scene: GeneratedScene): SceneValidationResult {
   if (designMode !== "raw") {
     for (const beat of sceneIR.beats) {
       for (const action of beat.actions) {
-        if ("targets" in action) {
+        if ("targets" in action && Array.isArray(action.targets)) {
           for (const target of action.targets) {
             if (!objectIds.has(target)) {
               issues.push(issue(scene.sceneId, `Beat "${beat.id}" references unknown object "${target}".`, {
@@ -250,6 +250,9 @@ export async function validateSingleScene(
   } catch (error) {
     const classified = classifyPreflightException(error);
     const message = error instanceof Error ? error.message : String(error);
+    scene.renderStatus = "failed";
+    scene.qualityStatus = "failed-runtime";
+    scene.sceneIR.metadata.qualityStatus = "failed-runtime";
     throw new ValidationFailure(
       `Scene "${scene.sceneId}" failed preflight: ${message}`,
       classified.layer,
@@ -257,28 +260,40 @@ export async function validateSingleScene(
     );
   }
   scene.preflightReport = preflightReport;
+  scene.renderStatus = "renderable";
+  scene.qualityStatus = preflightReport.passed ? "passed" : "needs-review";
+  scene.sceneIR.metadata.qualityStatus = scene.qualityStatus;
+  writeFileSync(
+    join(context.jobDir, "scene-ir", `${scene.sceneId}.normalized.json`),
+    JSON.stringify(
+      {
+        designMode: scene.designMode,
+        normalizedFromProvider: scene.sceneIR.normalizedFromProvider,
+        normalizationIssues: scene.normalizationIssues,
+        usedFallback: scene.usedFallback,
+        renderStatus: scene.renderStatus,
+        qualityStatus: scene.qualityStatus,
+        creativePrimitiveCount: scene.creativePrimitiveCount,
+        motionRecipeCount: scene.motionRecipeCount,
+        boringScore: scene.boringScore,
+        sceneIR: scene.sceneIR,
+      },
+      null,
+      2,
+    ),
+    "utf-8",
+  );
   issues.push(
     ...preflightReport.issues.map((issue) => ({
       sceneId: issue.sceneId,
-      severity: issue.severity,
+      severity: "warning" as const,
       category: issue.category,
       code: `preflight.${issue.category}`,
       layer: "preflight" as const,
-      message: issue.message,
+      message: `${issue.message} (${issue.severity}; renderable scene kept for review)`,
       suggestedFix: issue.suggestedFix,
     })),
   );
-
-  if (!preflightReport.passed) {
-    throw new ValidationFailure(
-      `Scene "${scene.sceneId}" failed preflight: ${preflightReport.issues
-        .filter((issue) => issue.severity === "error")
-        .map((issue) => issue.message)
-        .join("; ")}`,
-      "preflight",
-      "preflight.metrics_failed",
-    );
-  }
 
   return { scene, issues };
 }
