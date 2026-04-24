@@ -7,7 +7,6 @@ import {
   writeFileSync,
   readFileSync,
   renameSync,
-  unlinkSync,
 } from "node:fs";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
@@ -299,6 +298,17 @@ export function recoverOrphanedJobs(): RecoveryResult[] {
       const previousStatus = manifest.status;
       manifest.status = "interrupted";
       writeManifest(jobDir, manifest);
+      const timing = readTiming(jobDir);
+      if (timing) {
+        writeTiming(jobDir, {
+          ...timing,
+          completedAt: Date.now(),
+          totalMs: Date.now() - timing.startedAt,
+          outcome: "interrupted",
+          failedStage: manifest.currentStage,
+          error: "Server restart — no active controller",
+        });
+      }
       results.push({ jobId, previousStatus, newStatus: "interrupted", reason: "Server restart — no active controller" });
     }
   }

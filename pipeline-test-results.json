@@ -1,0 +1,1102 @@
+{
+  "total": 416301,
+  "jobId": "455e0db4-8a3d-4cea-9c4c-fcbc67fc458d",
+  "sceneStates": {
+    "hook_garden_problem": "ready",
+    "introduce_perimeter_and_area": "failed",
+    "predict_perimeter_calculation": "ready",
+    "worked_example_perimeter": "ready",
+    "address_misconception_area": "ready",
+    "predict_area_calculation": "ready",
+    "synthesize_compare_concepts": "ready"
+  },
+  "events": [
+    {
+      "type": "pipeline-started",
+      "timestamp": 45
+    },
+    {
+      "type": "stage-start",
+      "stage": "plan",
+      "timestamp": 45
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 45
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 45
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 441
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 840
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 1242
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 1643
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 2053
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 2455
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 2858
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 3261
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 3663
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 4065
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 4465
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 4866
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 5267
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 5669
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 6069
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 6471
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 6873
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 7276
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 7678
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 8078
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 8481
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 8882
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 9284
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 9686
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 10089
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 10490
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 10889
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 11292
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 11694
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 12095
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 12497
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 12909
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 13305
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 13714
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 14109
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 14511
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 14915
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 15313
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 15718
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 16116
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 16521
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 16944
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 17327
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 17727
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 18129
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 18531
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 18941
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 19339
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 19749
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 20142
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 20552
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 20951
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 21348
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 21762
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 22159
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 22563
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 22959
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 23365
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 23763
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 24164
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 24567
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 24967
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 25370
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 25771
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 26170
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 26575
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 26975
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 27376
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 27789
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 28192
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 28592
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 28995
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 29398
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 29799
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 30199
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 30602
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 31003
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 31405
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 31806
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 32208
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 32611
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 33012
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 33417
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 33815
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 34221
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 34619
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 35022
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 35422
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 35822
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 36225
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 36626
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 37028
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 37435
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 37834
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 38237
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 38636
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 39042
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 39442
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 39844
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 40250
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 40649
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 41049
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 41452
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 41852
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 42255
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 42655
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 43058
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 43459
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 43863
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 44266
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 44664
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 45066
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 45467
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 45872
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 46279
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 46674
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 47075
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 47481
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 47880
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 48281
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 48684
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 49091
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 49492
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 49890
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 50295
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 50692
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 51093
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 51498
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 51896
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 52301
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 52701
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 53109
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 53506
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 53909
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 54314
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 54712
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 55122
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 55520
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 55919
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 56322
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 56729
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 57124
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 57523
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 57925
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 58325
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 58727
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 59130
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 59532
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 59933
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 60336
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 60737
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 61139
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 61545
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 61947
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 62346
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 62749
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 63150
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 63552
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 63955
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 64354
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 64761
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 65160
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 65562
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 65964
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 66252
+    },
+    {
+      "type": "stage-progress",
+      "stage": "plan",
+      "timestamp": 66252
+    },
+    {
+      "type": "stage-complete",
+      "stage": "plan",
+      "timestamp": 66253
+    },
+    {
+      "type": "plan-ready",
+      "timestamp": 66253
+    },
+    {
+      "type": "plan-awaiting-approval",
+      "timestamp": 66254
+    },
+    {
+      "type": "pipeline-started",
+      "timestamp": 17
+    },
+    {
+      "type": "plan-ready",
+      "timestamp": 17
+    },
+    {
+      "type": "scene-generating",
+      "sceneId": "hook_garden_problem",
+      "timestamp": 17
+    },
+    {
+      "type": "scene-generating",
+      "sceneId": "introduce_perimeter_and_area",
+      "timestamp": 17
+    },
+    {
+      "type": "scene-generating",
+      "sceneId": "predict_perimeter_calculation",
+      "timestamp": 17
+    },
+    {
+      "type": "scene-generating",
+      "sceneId": "worked_example_perimeter",
+      "timestamp": 17
+    },
+    {
+      "type": "scene-generating",
+      "sceneId": "address_misconception_area",
+      "timestamp": 17
+    },
+    {
+      "type": "scene-generating",
+      "sceneId": "predict_area_calculation",
+      "timestamp": 17
+    },
+    {
+      "type": "scene-generating",
+      "sceneId": "synthesize_compare_concepts",
+      "timestamp": 17
+    },
+    {
+      "type": "scene-rendered",
+      "sceneId": "hook_garden_problem",
+      "timestamp": 49775
+    },
+    {
+      "type": "scene-ready",
+      "sceneId": "hook_garden_problem",
+      "timestamp": 49775
+    },
+    {
+      "type": "scene-rendered",
+      "sceneId": "worked_example_perimeter",
+      "timestamp": 93897
+    },
+    {
+      "type": "scene-ready",
+      "sceneId": "worked_example_perimeter",
+      "timestamp": 93897
+    },
+    {
+      "type": "scene-rendered",
+      "sceneId": "predict_area_calculation",
+      "timestamp": 129871
+    },
+    {
+      "type": "scene-ready",
+      "sceneId": "predict_area_calculation",
+      "timestamp": 129871
+    },
+    {
+      "type": "scene-rendered",
+      "sceneId": "synthesize_compare_concepts",
+      "timestamp": 148471
+    },
+    {
+      "type": "scene-ready",
+      "sceneId": "synthesize_compare_concepts",
+      "timestamp": 148471
+    },
+    {
+      "type": "scene-rendered",
+      "sceneId": "address_misconception_area",
+      "timestamp": 154311
+    },
+    {
+      "type": "scene-ready",
+      "sceneId": "address_misconception_area",
+      "timestamp": 154311
+    },
+    {
+      "type": "scene-rendered",
+      "sceneId": "predict_perimeter_calculation",
+      "timestamp": 266046
+    },
+    {
+      "type": "scene-ready",
+      "sceneId": "predict_perimeter_calculation",
+      "timestamp": 266046
+    },
+    {
+      "type": "scene-failed",
+      "sceneId": "introduce_perimeter_and_area",
+      "timestamp": 337332
+    },
+    {
+      "type": "codegen-ready",
+      "timestamp": 337332
+    },
+    {
+      "type": "validation-report",
+      "timestamp": 337332
+    },
+    {
+      "type": "stage-complete",
+      "stage": "codegen",
+      "timestamp": 337332
+    },
+    {
+      "type": "stage-complete",
+      "stage": "render",
+      "timestamp": 337332
+    },
+    {
+      "type": "stage-start",
+      "stage": "postprocess",
+      "timestamp": 337332
+    },
+    {
+      "type": "stage-progress",
+      "stage": "postprocess",
+      "timestamp": 337332
+    },
+    {
+      "type": "stage-progress",
+      "stage": "postprocess",
+      "timestamp": 337482
+    },
+    {
+      "type": "stage-progress",
+      "stage": "postprocess",
+      "timestamp": 337634
+    },
+    {
+      "type": "stage-progress",
+      "stage": "postprocess",
+      "timestamp": 337868
+    },
+    {
+      "type": "stage-progress",
+      "stage": "postprocess",
+      "timestamp": 338069
+    },
+    {
+      "type": "stage-progress",
+      "stage": "postprocess",
+      "timestamp": 338263
+    },
+    {
+      "type": "stage-progress",
+      "stage": "postprocess",
+      "timestamp": 338457
+    },
+    {
+      "type": "stage-progress",
+      "stage": "postprocess",
+      "timestamp": 338603
+    },
+    {
+      "type": "stage-progress",
+      "stage": "postprocess",
+      "timestamp": 339890
+    },
+    {
+      "type": "stage-progress",
+      "stage": "postprocess",
+      "timestamp": 340618
+    },
+    {
+      "type": "stage-complete",
+      "stage": "postprocess",
+      "timestamp": 340618
+    },
+    {
+      "type": "stage-start",
+      "stage": "compose",
+      "timestamp": 340618
+    },
+    {
+      "type": "stage-progress",
+      "stage": "compose",
+      "timestamp": 340618
+    },
+    {
+      "type": "stage-progress",
+      "stage": "compose",
+      "timestamp": 340618
+    },
+    {
+      "type": "stage-progress",
+      "stage": "compose",
+      "timestamp": 341540
+    },
+    {
+      "type": "stage-progress",
+      "stage": "compose",
+      "timestamp": 345378
+    },
+    {
+      "type": "stage-progress",
+      "stage": "compose",
+      "timestamp": 350004
+    },
+    {
+      "type": "stage-complete",
+      "stage": "compose",
+      "timestamp": 350004
+    },
+    {
+      "type": "pipeline-complete",
+      "timestamp": 350004
+    }
+  ]
+}

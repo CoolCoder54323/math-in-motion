@@ -46,6 +46,14 @@ type JobDirInfo = {
   clipsCount: number;
   diskUsage: string;
   tokens: TokenAggregate;
+  normalizationWarnings: number;
+  timing: {
+    outcome: string;
+    totalMs: number;
+    failedStage?: string;
+    failureLayer?: string;
+    failureCode?: string;
+  } | null;
 };
 
 type TimingEntry = {
@@ -399,6 +407,7 @@ export default function DevPage() {
                     <th className="pb-2 pr-4">Plan Title</th>
                     <th className="pb-2 pr-4">Scene States</th>
                     <th className="pb-2 pr-4">Clips</th>
+                    <th className="pb-2 pr-4">Timing</th>
                     <th className="pb-2 pr-4">Disk</th>
                     <th className="pb-2 pr-4">Cost</th>
                   </tr>
@@ -425,6 +434,13 @@ export default function DevPage() {
                       <td className="py-1.5 pr-4 text-slate-300">{d.planTitle ?? "-"}</td>
                       <td className="py-1.5 pr-4 text-slate-400">{d.sceneStateCount}</td>
                       <td className="py-1.5 pr-4 text-slate-400">{d.clipsCount}</td>
+                      <td className="py-1.5 pr-4 text-slate-400">
+                        {d.timing
+                          ? `${(d.timing.totalMs / 1000).toFixed(1)}s · ${d.timing.outcome}${d.timing.failedStage ? ` @ ${d.timing.failedStage}` : ""}${d.timing.failureLayer ? ` · ${d.timing.failureLayer}${d.timing.failureCode ? `/${d.timing.failureCode}` : ""}` : ""}${d.normalizationWarnings ? ` · ${d.normalizationWarnings} norm warn` : ""}`
+                          : d.normalizationWarnings
+                            ? `${d.normalizationWarnings} norm warn`
+                            : "-"}
+                      </td>
                       <td className="py-1.5 pr-4 text-slate-400">{d.diskUsage}</td>
                       <td className="py-1.5 pr-4 text-emerald-400">{formatUSD(d.tokens.estimatedCostUSD)}</td>
                     </tr>

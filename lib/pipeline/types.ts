@@ -266,6 +266,27 @@ export type SceneIR = {
   customBlocks?: SceneIRCustomBlocks;
 };
 
+export type FailureLayer =
+  | "model"
+  | "normalization"
+  | "validation"
+  | "compiler"
+  | "runtime"
+  | "preflight"
+  | "pipeline";
+
+export type NormalizationIssue = {
+  severity: "info" | "warning" | "error";
+  code: string;
+  message: string;
+  path?: string;
+};
+
+export type NormalizedSceneIR = SceneIR & {
+  normalizedFromProvider?: "anthropic" | "openai" | "deepseek" | "kimi";
+  normalizationIssues?: NormalizationIssue[];
+};
+
 export type PreflightObjectSnapshot = {
   id: string;
   kind: string;
@@ -326,10 +347,11 @@ export type GeneratedScene = {
   sceneId: string;
   className: string;
   designMode: SceneDesignMode;
-  sceneIR: SceneIR;
+  sceneIR: NormalizedSceneIR;
   pythonCode: string;
   capabilitiesUsed: string[];
   customBlockCount: number;
+  normalizationIssues: NormalizationIssue[];
   preflightReport?: PreflightReport;
 };
 
@@ -351,7 +373,15 @@ export type ValidationIssue = {
   severity: "error" | "warning";
   message: string;
   category?: string;
+  code?: string;
+  layer?: FailureLayer;
   suggestedFix?: string;
+};
+
+export type SceneValidationResult = {
+  ok: boolean;
+  designMode: SceneDesignMode;
+  issues: ValidationIssue[];
 };
 
 export type PipelineEvent =
@@ -360,14 +390,14 @@ export type PipelineEvent =
   | { type: "stage-progress"; stage: PipelineStage; progress: number; message: string }
   | { type: "stage-complete"; stage: PipelineStage; result: StageResult }
   | { type: "pipeline-complete"; manifest: PipelineManifest }
-  | { type: "pipeline-error"; error: string; failedStage: PipelineStage }
+  | { type: "pipeline-error"; error: string; failedStage?: PipelineStage; layer?: FailureLayer; code?: string }
   | { type: "plan-ready"; plan: PlanOutput }
   | { type: "plan-awaiting-approval"; plan: PlanOutput }
   | { type: "codegen-ready"; scenes: GeneratedScene[] }
   | { type: "scene-rendered"; sceneId: string; clipUrl: string }
   | { type: "scene-generating"; sceneId: string }
   | { type: "scene-ready"; sceneId: string; clipUrl: string; durationSeconds: number; tokenUsage?: SceneTiming["tokenUsage"] }
-  | { type: "scene-failed"; sceneId: string; error: string; tokenUsage?: SceneTiming["tokenUsage"] }
+  | { type: "scene-failed"; sceneId: string; error: string; layer?: FailureLayer; code?: string; tokenUsage?: SceneTiming["tokenUsage"] }
   | { type: "scene-regenerating"; sceneId: string }
   | { type: "validation-report"; scenes: number; passed: number; issues: ValidationIssue[] }
   | { type: "pipeline-paused"; stage: PipelineStage; resumableFrom: PipelineStage }
@@ -434,6 +464,10 @@ export type SceneTiming = {
 export type StageTiming = {
   stage: PipelineStage;
   totalMs: number;
+  elapsedMs?: number;
+  aggregateWorkMs?: number;
+  successfulScenes?: number;
+  failedScenes?: number;
   llmProvider?: string;
   llmModel?: string;
   promptSummary?: string;
@@ -454,6 +488,11 @@ export type PipelineTiming = {
   startedAt: number;
   completedAt: number;
   totalMs: number;
+  outcome: "complete" | "failed" | "aborted" | "interrupted";
+  failedStage?: PipelineStage;
+  error?: string;
+  failureLayer?: FailureLayer;
+  failureCode?: string;
   quality: "l" | "m" | "h";
   conceptText?: string;
   latexProblem?: string;

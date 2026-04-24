@@ -1,4 +1,4 @@
-import { mkdirSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { PipelineStageHandler } from "../stage";
 import type {
@@ -8,6 +8,7 @@ import type {
 } from "../types";
 import { callLLM, resolveProvider } from "../llm-client";
 import { compileScene, persistCompiledScene } from "../compiler";
+import { normalizeSceneIR } from "../scene-normalizer";
 import {
   buildFallbackVizSceneIR,
   buildSceneDesignSystemPrompt,
@@ -28,6 +29,7 @@ export const vizCodegenStage: PipelineStageHandler<VizCodegenInput, CodegenOutpu
   async *execute(input, context): AsyncGenerator<PipelineEvent, CodegenOutput, undefined> {
     mkdirSync(join(context.jobDir, "scene-ir"), { recursive: true });
     mkdirSync(join(context.jobDir, "scenes"), { recursive: true });
+    mkdirSync(join(context.jobDir, "llm"), { recursive: true });
 
     yield {
       type: "stage-progress",
@@ -50,13 +52,19 @@ export const vizCodegenStage: PipelineStageHandler<VizCodegenInput, CodegenOutpu
     }).catch(() => null);
 
     if (response?.usage) context.lastLLMUsage = response.usage;
+    if (response?.text) {
+      writeFileSync(join(context.jobDir, "llm", "viz-codegen.txt"), response.text, "utf-8");
+    }
 
     let scene;
     try {
       const [sceneIR] = parseSceneDesignResponse(response?.text ?? "");
-      scene = compileScene(enrichSceneIR(sceneIR), "Viz");
+      scene = compileScene(
+        normalizeSceneIR(enrichSceneIR(sceneIR), provider.provider),
+        "Viz",
+      );
     } catch {
-      scene = compileScene(buildFallbackVizSceneIR(input), "Viz");
+      scene = compileScene(normalizeSceneIR(buildFallbackVizSceneIR(input), provider.provider), "Viz");
     }
 
     persistCompiledScene(context.jobDir, scene);

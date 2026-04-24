@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { PipelineContext, PipelineStageHandler } from "../stage";
 import type {
@@ -13,6 +13,7 @@ import type {
 import { callLLM, resolveProvider, type UserPromptParts } from "../llm-client";
 import type { LLMUsage } from "../llm-usage";
 import { compileScene, persistCompiledScene } from "../compiler";
+import { normalizeSceneIR } from "../scene-normalizer";
 import {
   buildFallbackSceneIR,
   buildLessonSceneDesignPrompt,
@@ -74,9 +75,10 @@ export async function codegenSingleScene(
   context: PipelineContext,
   options?: PipelineInput["options"],
   errorFeedback?: string,
-): Promise<{ scene: GeneratedScene; usage: LLMUsage | null }> {
+): Promise<{ scene: GeneratedScene; usage: LLMUsage | null; cacheHit: boolean }> {
   mkdirSync(join(context.jobDir, "scene-ir"), { recursive: true });
   mkdirSync(join(context.jobDir, "scenes"), { recursive: true });
+  mkdirSync(join(context.jobDir, "llm"), { recursive: true });
 
   const provider = resolveProvider(options);
   const systemPrompt = buildSceneDesignSystemPrompt();
@@ -85,7 +87,7 @@ export async function codegenSingleScene(
   const cached = !errorFeedback ? getCached(key) : undefined;
   if (cached) {
     persistCompiledScene(context.jobDir, cached.scene);
-    return { scene: cached.scene, usage: cached.usage };
+    return { scene: cached.scene, usage: null, cacheHit: true };
   }
 
   let usage: LLMUsage | null = null;
@@ -101,19 +103,18 @@ export async function codegenSingleScene(
       signal: context.signal,
     });
     usage = response.usage;
+    writeFileSync(join(context.jobDir, "llm", `${scene.sceneId}.codegen.txt`), response.text, "utf-8");
     const [sceneIR] = parseSceneDesignResponse(response.text);
-    const enriched = enrichSceneIR(sceneIR);
-    if (!enriched.objects?.length || !enriched.beats?.length) {
-      throw new Error("Scene IR missing objects or beats after enrichment");
-    }
-    generatedScene = compileScene(enriched);
+    generatedScene = compileScene(
+      normalizeSceneIR(enrichSceneIR(sceneIR), provider.provider),
+    );
   } catch {
-    generatedScene = compileScene(buildFallbackSceneIR(scene, plan.title));
+    generatedScene = compileScene(normalizeSceneIR(buildFallbackSceneIR(scene, plan.title), provider.provider));
   }
 
   persistCompiledScene(context.jobDir, generatedScene);
   setCached(key, { scene: generatedScene, usage, timestamp: Date.now() });
-  return { scene: generatedScene, usage };
+  return { scene: generatedScene, usage, cacheHit: false };
 }
 
 export const codegenStage: PipelineStageHandler<CodegenInput, CodegenOutput> = {
@@ -123,6 +124,7 @@ export const codegenStage: PipelineStageHandler<CodegenInput, CodegenOutput> = {
     const { plan, options } = input;
     mkdirSync(join(context.jobDir, "scene-ir"), { recursive: true });
     mkdirSync(join(context.jobDir, "scenes"), { recursive: true });
+    mkdirSync(join(context.jobDir, "llm"), { recursive: true });
 
     yield {
       type: "stage-progress",
@@ -175,6 +177,9 @@ export const codegenStage: PipelineStageHandler<CodegenInput, CodegenOutput> = {
     }
 
     if (usage) context.lastLLMUsage = usage;
+    if (raw) {
+      writeFileSync(join(context.jobDir, "llm", "lesson-codegen.txt"), raw, "utf-8");
+    }
 
     yield {
       type: "stage-progress",
@@ -186,12 +191,22 @@ export const codegenStage: PipelineStageHandler<CodegenInput, CodegenOutput> = {
     let scenes: GeneratedScene[];
     try {
       const designed = parseSceneDesignResponse(raw);
-      const bySceneId = new Map(designed.map((sceneIR) => [sceneIR.metadata.sceneId, enrichSceneIR(sceneIR)]));
+      const bySceneId = new Map(
+        designed.map((sceneIR) => [
+          sceneIR.metadata.sceneId,
+          normalizeSceneIR(enrichSceneIR(sceneIR), provider.provider),
+        ]),
+      );
       scenes = plan.sceneBreakdown.map((scene) =>
-        compileScene(bySceneId.get(scene.sceneId) ?? buildFallbackSceneIR(scene, plan.title)),
+        compileScene(
+          bySceneId.get(scene.sceneId)
+            ?? normalizeSceneIR(buildFallbackSceneIR(scene, plan.title), provider.provider),
+        ),
       );
     } catch {
-      scenes = plan.sceneBreakdown.map((scene) => compileScene(buildFallbackSceneIR(scene, plan.title)));
+      scenes = plan.sceneBreakdown.map((scene) =>
+        compileScene(normalizeSceneIR(buildFallbackSceneIR(scene, plan.title), provider.provider)),
+      );
     }
 
     for (const scene of scenes) {

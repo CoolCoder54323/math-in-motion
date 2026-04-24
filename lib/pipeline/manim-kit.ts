@@ -8,7 +8,36 @@ const DEFAULT_SAFE_AREA = {
 };
 
 function toPython(value: unknown): string {
-  return JSON.stringify(value, null, 2);
+  return pythonLiteral(value, 0);
+}
+
+function pythonLiteral(value: unknown, indentLevel: number): string {
+  if (value === null || value === undefined) return "None";
+  if (typeof value === "boolean") return value ? "True" : "False";
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? String(value) : "None";
+  }
+  if (typeof value === "string") {
+    return JSON.stringify(value);
+  }
+  if (Array.isArray(value)) {
+    if (value.length === 0) return "[]";
+    const indent = " ".repeat(indentLevel);
+    const childIndent = " ".repeat(indentLevel + 2);
+    return `[\n${value
+      .map((entry) => `${childIndent}${pythonLiteral(entry, indentLevel + 2)}`)
+      .join(",\n")}\n${indent}]`;
+  }
+  if (typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>);
+    if (entries.length === 0) return "{}";
+    const indent = " ".repeat(indentLevel);
+    const childIndent = " ".repeat(indentLevel + 2);
+    return `{\n${entries
+      .map(([key, entryValue]) => `${childIndent}${JSON.stringify(key)}: ${pythonLiteral(entryValue, indentLevel + 2)}`)
+      .join(",\n")}\n${indent}}`;
+  }
+  return JSON.stringify(String(value));
 }
 
 function compoundHint(spec: SceneIRObject): string {
@@ -107,6 +136,26 @@ def build_mascot():
         angle=-PI / 3,
     )
     return VGroup(body, eye1, eye2, smile)
+
+class RuntimeSceneProxy:
+    def __init__(self, scene, registry):
+        object.__setattr__(self, "_scene", scene)
+        object.__setattr__(self, "_registry", registry)
+
+    def __getattr__(self, name):
+        registry = object.__getattribute__(self, "_registry")
+        if name in registry:
+            return registry[name]
+        return getattr(object.__getattribute__(self, "_scene"), name)
+
+    def __getitem__(self, key):
+        return object.__getattribute__(self, "_registry")[key]
+
+    def __setattr__(self, name, value):
+        if name in {"_scene", "_registry"}:
+            object.__setattr__(self, name, value)
+            return
+        setattr(object.__getattribute__(self, "_scene"), name, value)
 
 class SceneRuntime:
     def __init__(self, scene, scene_ir, scene_dir):
@@ -226,6 +275,60 @@ class SceneRuntime:
     def asset_path(self, name):
         return str(self.scene_dir / name)
 
+    def _highlight_key(self, value):
+        if isinstance(value, str):
+            cleaned = value.replace(":", ",")
+            parts = [part.strip() for part in cleaned.split(",")]
+            if len(parts) >= 2:
+                return f"{int(float(parts[0]))}:{int(float(parts[1]))}"
+        if isinstance(value, dict):
+            return f"{int(float(value.get('row')))}:{int(float(value.get('col')))}"
+        if isinstance(value, (list, tuple)) and len(value) >= 2:
+            return f"{int(float(value[0]))}:{int(float(value[1]))}"
+        return None
+
+    def _highlight_keys(self, values):
+        keys = set()
+        for item in values or []:
+            try:
+                key = self._highlight_key(item)
+                if key is not None:
+                    keys.add(key)
+            except Exception:
+                continue
+        return keys
+
+    def _safe_float(self, value, default=0.0):
+        try:
+            return float(value or default)
+        except Exception:
+            return default
+
+    def _safe_font_size(self, mob):
+        try:
+            value = getattr(mob, "font_size", None)
+            if value is None:
+                return None
+            return float(value)
+        except Exception:
+            return None
+
+    def _point3(self, value, fallback):
+        if value is None:
+            value = fallback
+        arr = np.array(value, dtype=float).flatten()
+        if arr.size == 2:
+            arr = np.array([arr[0], arr[1], 0.0])
+        elif arr.size == 1:
+            arr = np.array([arr[0], 0.0, 0.0])
+        elif arr.size >= 3:
+            arr = np.array([arr[0], arr[1], arr[2]])
+        else:
+            arr = np.array(fallback, dtype=float).flatten()
+            if arr.size == 2:
+                arr = np.array([arr[0], arr[1], 0.0])
+        return arr
+
     def build_object(self, spec):
         kind = spec["kind"]
         props = spec.get("props") or {}
@@ -257,9 +360,18 @@ class SceneRuntime:
         elif kind == "dot":
             mob = Dot(radius=props.get("radius", 0.08), color=props.get("color", INK))
         elif kind == "line":
-            mob = Line(props.get("start", LEFT), props.get("end", RIGHT), color=props.get("color", INK))
+            mob = Line(
+                self._point3(props.get("start"), LEFT),
+                self._point3(props.get("end"), RIGHT),
+                color=props.get("color", INK),
+            )
         elif kind == "arrow":
-            mob = Arrow(props.get("start", LEFT), props.get("end", RIGHT), color=props.get("color", ORANGE), buff=props.get("buff", 0.2))
+            mob = Arrow(
+                self._point3(props.get("start"), LEFT),
+                self._point3(props.get("end"), RIGHT),
+                color=props.get("color", ORANGE),
+                buff=props.get("buff", 0.2),
+            )
         elif kind == "brace":
             target_id = props.get("target")
             direction_name = props.get("direction", "DOWN")
@@ -317,13 +429,13 @@ class SceneRuntime:
         elif kind == "compound.array_grid":
             rows = max(int(props.get("rows", 3)), 1)
             cols = max(int(props.get("cols", 4)), 1)
-            highlight = set(props.get("highlighted", []))
+            highlight = self._highlight_keys(props.get("highlighted", []))
             cell = props.get("cellSize", 0.55)
             cells = []
             for row in range(rows):
                 for col in range(cols):
                     square = Square(side_length=cell, color=INK, stroke_width=2)
-                    fill = SKY if (row, col) in highlight or [row, col] in highlight else PANEL_BG
+                    fill = SKY if f"{row}:{col}" in highlight else PANEL_BG
                     square.set_fill(fill, opacity=0.95)
                     square.move_to(np.array([(col - (cols - 1) / 2) * (cell + 0.05), ((rows - 1) / 2 - row) * (cell + 0.05), 0]))
                     cells.append(square)
@@ -501,24 +613,30 @@ class SceneRuntime:
         for object_id, mob in self.registry.items():
             if mob is None:
                 continue
-            center = mob.get_center()
-            width = float(getattr(mob, "width", 0.0) or 0.0)
-            height = float(getattr(mob, "height", 0.0) or 0.0)
-            rows.append({
-                "id": object_id,
-                "kind": self.object_specs.get(object_id, {}).get("kind", "unknown"),
-                "visible": object_id in self.visible,
-                "centerX": float(center[0]),
-                "centerY": float(center[1]),
-                "width": width,
-                "height": height,
-                "xMin": float(center[0] - width / 2),
-                "xMax": float(center[0] + width / 2),
-                "yMin": float(center[1] - height / 2),
-                "yMax": float(center[1] + height / 2),
-                "fontSize": float(getattr(mob, "font_size", 0) or 0),
-                "relatedTo": self.related_map.get(object_id, []),
-            })
+            try:
+                center = mob.get_center()
+                width = self._safe_float(getattr(mob, "width", 0.0))
+                height = self._safe_float(getattr(mob, "height", 0.0))
+                row = {
+                    "id": object_id,
+                    "kind": self.object_specs.get(object_id, {}).get("kind", "unknown"),
+                    "visible": object_id in self.visible,
+                    "centerX": float(center[0]),
+                    "centerY": float(center[1]),
+                    "width": width,
+                    "height": height,
+                    "xMin": float(center[0] - width / 2),
+                    "xMax": float(center[0] + width / 2),
+                    "yMin": float(center[1] - height / 2),
+                    "yMax": float(center[1] + height / 2),
+                    "relatedTo": self.related_map.get(object_id, []),
+                }
+                font_size = self._safe_font_size(mob)
+                if font_size is not None:
+                    row["fontSize"] = font_size
+                rows.append(row)
+            except Exception:
+                continue
         self.snapshots.append({
             "beatId": beat_id,
             "timestampSeconds": self.time_cursor,
@@ -573,6 +691,8 @@ ${blueprintComment}
 class ${className}(${sceneIR.metadata.baseClass ?? "Scene"}):
     def construct(self):
         runtime = SceneRuntime(self, SCENE_IR, Path(__file__).parent)
+        runtime.objects = runtime.registry
+        self.objects = runtime.registry
 ${indentPython(rawConstruct, 8)}
         runtime.snapshot("raw_final")
         runtime.persist_snapshots()
@@ -582,10 +702,10 @@ ${indentPython(rawConstruct, 8)}
   const blocks = sceneIR.customBlocks ?? {};
   const helpers = blocks.helpers?.trim() ?? "";
   const rawFactories = blocks.objectFactories?.length
-    ? blocks.objectFactories.map((entry) => entry.code.trim()).join("\n\n")
+    ? blocks.objectFactories.map((entry) => normalizeObjectFactoryBlock(entry.id, entry.code)).join("\n\n")
     : "";
   const rawTimeline = blocks.timeline?.length
-    ? blocks.timeline.map((entry) => entry.code.trim()).join("\n\n")
+    ? blocks.timeline.map((entry) => normalizeTimelineBlock(entry.id, entry.code)).join("\n\n")
     : "";
   const rawUpdaters = blocks.updaters?.length
     ? blocks.updaters.map((entry) => entry.code.trim()).join("\n\n")
@@ -620,6 +740,66 @@ function indentPython(source: string, spaces: number): string {
     .split("\n")
     .map((line) => (line.trim().length === 0 ? line : `${indent}${line}`))
     .join("\n");
+}
+
+function normalizeTimelineBlock(blockId: string, source: string): string {
+  const trimmed = source.trim();
+  if (!trimmed) return "";
+  if (/^\s*def\s+[A-Za-z_][A-Za-z0-9_]*\s*\(/m.test(trimmed)) {
+    return trimmed;
+  }
+
+  const fnName = blockId.replace(/[^A-Za-z0-9_]/g, "_") || "timeline_block";
+  return [
+    `def ${fnName}(runtime):`,
+    "    scene = runtime.scene",
+    "    self = scene",
+    "    objects = runtime.registry",
+    "    runtime.objects = runtime.registry",
+    "    self.objects = runtime.registry",
+    "    for object_id, mob in runtime.registry.items():",
+    "        setattr(self, object_id, mob)",
+    indentPython(trimmed, 4),
+  ].join("\n");
+}
+
+function normalizeObjectFactoryBlock(blockId: string, source: string): string {
+  const trimmed = source.trim();
+  if (!trimmed) return "";
+
+  const fnName = blockId.replace(/[^A-Za-z0-9_]/g, "_") || "object_factory";
+  const exactFactoryPattern = new RegExp(`^\\s*def\\s+${fnName}\\s*\\(`, "m");
+  if (exactFactoryPattern.test(trimmed)) {
+    return trimmed;
+  }
+
+  const definedFunctions = Array.from(trimmed.matchAll(/^\s*def\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(/gm));
+  if (definedFunctions.length > 0) {
+    const firstHelper = definedFunctions[0]?.[1];
+    return [
+      trimmed,
+      "",
+      `def ${fnName}(runtime, spec):`,
+      "    scene = runtime.scene",
+      "    self = RuntimeSceneProxy(scene, runtime.registry)",
+      "    props = spec.get(\"props\") or {}",
+      `    helper = ${firstHelper}`,
+      "    argc = getattr(getattr(helper, \"__code__\", None), \"co_argcount\", 0)",
+      "    if argc >= 2:",
+      "        return helper(scene, props)",
+      "    if argc == 1:",
+      "        return helper(scene)",
+      "    return helper()",
+    ].join("\n");
+  }
+
+  return [
+    `def ${fnName}(runtime, spec):`,
+    "    scene = runtime.scene",
+    "    self = RuntimeSceneProxy(scene, runtime.registry)",
+    "    props = spec.get(\"props\") or {}",
+    indentPython(trimmed, 4),
+  ].join("\n");
 }
 
 export function normalizeAnchor(anchor?: SceneIRAnchor): SceneIRAnchor | undefined {

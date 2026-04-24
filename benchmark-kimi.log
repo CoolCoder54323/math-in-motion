@@ -1,0 +1,17 @@
+◇ injected env (0) from .env.local // tip: ⌘ multiple files { path: ['.env.local', '.env'] }
+=== KIMI CODEGEN PROMPT BENCHMARK ===
+Full prompt hash:    5c0d6e1ceff9e279
+Compressed hash:     adc943423a901f74
+Full size:           121,527 chars
+Compressed size:     51,057 chars
+Reduction:           58.0%
+
+--- RUN 1: FULL PROMPT (11 examples) ---
+FULL ERROR: {"message":"Your account org-e729451b86344b9284b97a15f42b44eb / proj-9cc6a0328f864b8884ce6debe0112c40 <ak-f9n1hwkpffni11frojui> request reached organization TPD rate limit, current: 1522525, limit: 1500000","type":"rate_limit_reached_error"}
+--- RUN 2: COMPRESSED PROMPT (4 examples + style guide) ---
+COMPRESSED ERROR: {"message":"Your account org-e729451b86344b9284b97a15f42b44eb / proj-9cc6a0328f864b8884ce6debe0112c40 <ak-f9n1hwkpffni11frojui> request reached organization TPD rate limit, current: 1501755, limit: 1500000","type":"rate_limit_reached_error"}
+
+=== RESULTS ===
+Full ok=false status=429 | Compressed ok=false status=429
+
+Results saved to benchmark-results.json

@@ -1,7 +1,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { buildCompiledPython } from "./manim-kit";
-import type { GeneratedScene, SceneDesignMode, SceneIR } from "./types";
+import type { GeneratedScene, NormalizedSceneIR, SceneDesignMode, SceneIR } from "./types";
 
 export function sceneIdToClassName(sceneId: string): string {
   return sceneId
@@ -28,7 +28,7 @@ export function inferDesignMode(sceneIR: SceneIR): SceneDesignMode {
   return countCustomBlocks(sceneIR) > 0 ? "hybrid" : "ir";
 }
 
-export function compileScene(sceneIR: SceneIR, overrideClassName?: string): GeneratedScene {
+export function compileScene(sceneIR: NormalizedSceneIR, overrideClassName?: string): GeneratedScene {
   const className = overrideClassName ?? sceneIdToClassName(sceneIR.metadata.sceneId);
   const designMode = inferDesignMode(sceneIR);
   const pythonCode = buildCompiledPython(sceneIR, className, designMode);
@@ -44,6 +44,7 @@ export function compileScene(sceneIR: SceneIR, overrideClassName?: string): Gene
     pythonCode,
     capabilitiesUsed,
     customBlockCount: countCustomBlocks(sceneIR),
+    normalizationIssues: sceneIR.normalizationIssues ?? [],
   };
 }
 
@@ -54,6 +55,20 @@ export function persistCompiledScene(jobDir: string, scene: GeneratedScene): voi
   writeFileSync(
     join(jobDir, "scene-ir", `${scene.sceneId}.json`),
     JSON.stringify(scene.sceneIR, null, 2),
+    "utf-8",
+  );
+  writeFileSync(
+    join(jobDir, "scene-ir", `${scene.sceneId}.normalized.json`),
+    JSON.stringify(
+      {
+        designMode: scene.designMode,
+        normalizedFromProvider: scene.sceneIR.normalizedFromProvider,
+        normalizationIssues: scene.normalizationIssues,
+        sceneIR: scene.sceneIR,
+      },
+      null,
+      2,
+    ),
     "utf-8",
   );
 }

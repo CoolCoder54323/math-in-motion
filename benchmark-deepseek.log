@@ -1,0 +1,19 @@
+◇ injected env (0) from .env.local // tip: ⌘ suppress logs { quiet: true }
+=== DEEPSEEK CODEGEN PROMPT BENCHMARK ===
+Full prompt hash:    5c0d6e1ceff9e279
+Compressed hash:     adc943423a901f74
+Full size:           121,527 chars
+Compressed size:     51,057 chars
+Reduction:           58.0%
+
+--- RUN 1: FULL PROMPT (11 examples) ---
+--- RUN 2: COMPRESSED PROMPT (4 examples + style guide) ---
+
+=== RESULTS ===
+Full prompt:         81277ms (81.3s) — 37785 prompt / 2004 completion tokens
+Compressed:          70197ms (70.2s) — 16211 prompt / 1783 completion tokens
+Time difference:     11080ms (11.1s)
+Speedup:             1.16x
+Token savings:       21574 prompt tokens (57.1% reduction)
+
+Results saved to benchmark-results.json

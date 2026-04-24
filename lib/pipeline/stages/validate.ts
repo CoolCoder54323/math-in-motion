@@ -1,9 +1,13 @@
 import { execFile } from "node:child_process";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import type { PipelineContext, PipelineStageHandler } from "../stage";
 import type {
   CodegenOutput,
+  FailureLayer,
   GeneratedScene,
   PipelineEvent,
+  SceneValidationResult,
   ValidateOutput,
   ValidationIssue,
 } from "../types";
@@ -16,106 +20,183 @@ const ALWAYS_BANNED_PATTERNS = [
   { pattern: /os\.system/g, msg: "os.system calls are not allowed in scenes" },
 ];
 
-function checkSceneIR(scene: GeneratedScene): ValidationIssue[] {
+function classifyPreflightException(error: unknown): { layer: FailureLayer; code: string } {
+  const message = error instanceof Error ? error.message : String(error);
+  if (/snapshot|font_size|ZeroDivisionError/i.test(message)) {
+    return { layer: "runtime", code: "runtime.snapshot_error" };
+  }
+  if (/TypeError|ValueError|NameError|AttributeError|IndexError|KeyError/i.test(message)) {
+    return { layer: "runtime", code: "runtime.object_builder_error" };
+  }
+  return { layer: "preflight", code: "preflight.render_failed" };
+}
+
+class ValidationFailure extends Error {
+  constructor(
+    message: string,
+    public layer: FailureLayer,
+    public code: string,
+  ) {
+    super(message);
+    this.name = "ValidationFailure";
+  }
+}
+
+function issue(sceneId: string, message: string, params: {
+  severity: "error" | "warning";
+  category: string;
+  code: string;
+  layer: FailureLayer;
+  suggestedFix?: string;
+}): ValidationIssue {
+  return {
+    sceneId,
+    severity: params.severity,
+    category: params.category,
+    code: params.code,
+    layer: params.layer,
+    message,
+    suggestedFix: params.suggestedFix,
+  };
+}
+
+function checkSceneIR(scene: GeneratedScene): SceneValidationResult {
   const issues: ValidationIssue[] = [];
   const sceneIR = scene.sceneIR;
+  const designMode = scene.designMode;
+  const rawConstruct = sceneIR.customBlocks?.rawConstruct?.trim();
+  const hasObjects = Array.isArray(sceneIR.objects) && sceneIR.objects.length > 0;
+  const hasBeats = Array.isArray(sceneIR.beats) && sceneIR.beats.length > 0;
+  const hasTimelineBlocks = (sceneIR.customBlocks?.timeline?.length ?? 0) > 0;
+  const requiresDeclaredObjects =
+    designMode === "ir"
+      || (designMode === "hybrid"
+        && sceneIR.beats.some((beat) =>
+          beat.actions.some((action) => "targets" in action || action.type === "transform"),
+        ));
 
   if (!sceneIR.metadata?.sceneId) {
-    issues.push({
-      sceneId: scene.sceneId,
+    issues.push(issue(scene.sceneId, "Scene IR is missing metadata.sceneId.", {
       severity: "error",
       category: "schema",
-      message: "Scene IR is missing metadata.sceneId.",
-    });
+      code: "validation.schema_error",
+      layer: "validation",
+    }));
   }
   if (!Array.isArray(sceneIR.layout?.zones) || sceneIR.layout.zones.length === 0) {
-    issues.push({
-      sceneId: scene.sceneId,
+    issues.push(issue(scene.sceneId, "Scene IR must declare at least one layout zone.", {
       severity: "error",
       category: "schema",
-      message: "Scene IR must declare at least one layout zone.",
-    });
+      code: "validation.schema_error",
+      layer: "validation",
+    }));
   }
-  if (!Array.isArray(sceneIR.objects) || sceneIR.objects.length === 0) {
-    issues.push({
-      sceneId: scene.sceneId,
-      severity: "error",
-      category: "schema",
-      message: "Scene IR must contain at least one object.",
-    });
-  }
-  if (!Array.isArray(sceneIR.beats) || sceneIR.beats.length === 0) {
-    issues.push({
-      sceneId: scene.sceneId,
-      severity: "error",
-      category: "schema",
-      message: "Scene IR must contain at least one beat.",
-    });
+
+  if (designMode === "raw") {
+    if (!rawConstruct) {
+      issues.push(issue(scene.sceneId, "Raw scenes must include customBlocks.rawConstruct.", {
+        severity: "error",
+        category: "schema",
+        code: "validation.raw_mode_rejected",
+        layer: "validation",
+      }));
+    }
+  } else {
+    if (!hasObjects && requiresDeclaredObjects) {
+      issues.push(issue(scene.sceneId, "Scene IR must contain at least one object.", {
+        severity: "error",
+        category: "schema",
+        code: "validation.schema_error",
+        layer: "validation",
+      }));
+    }
+    if (!hasBeats) {
+      issues.push(issue(scene.sceneId, "Scene IR must contain at least one beat.", {
+        severity: "error",
+        category: "schema",
+        code: "validation.schema_error",
+        layer: "validation",
+      }));
+    }
+    if (designMode === "hybrid" && !hasObjects && !hasTimelineBlocks) {
+      issues.push(issue(scene.sceneId, "Hybrid scenes without objects must declare timeline custom blocks.", {
+        severity: "error",
+        category: "schema",
+        code: "validation.schema_error",
+        layer: "validation",
+      }));
+    }
   }
 
   const objectIds = new Set(sceneIR.objects.map((objectSpec) => objectSpec.id));
-  for (const beat of sceneIR.beats) {
-    for (const action of beat.actions) {
-      if ("targets" in action) {
-        for (const target of action.targets) {
-          if (!objectIds.has(target)) {
-            issues.push({
-              sceneId: scene.sceneId,
-              severity: "error",
-              category: "schema",
-              message: `Beat "${beat.id}" references unknown object "${target}".`,
-            });
+  if (designMode !== "raw") {
+    for (const beat of sceneIR.beats) {
+      for (const action of beat.actions) {
+        if ("targets" in action) {
+          for (const target of action.targets) {
+            if (!objectIds.has(target)) {
+              issues.push(issue(scene.sceneId, `Beat "${beat.id}" references unknown object "${target}".`, {
+                severity: "error",
+                category: "schema",
+                code: "validation.schema_error",
+                layer: "validation",
+              }));
+            }
           }
         }
-      }
-      if (action.type === "transform") {
-        if (!objectIds.has(action.from) || !objectIds.has(action.to)) {
-          issues.push({
-            sceneId: scene.sceneId,
-            severity: "error",
-            category: "schema",
-            message: `Beat "${beat.id}" has an invalid transform reference.`,
-          });
+        if (action.type === "transform") {
+          if (!objectIds.has(action.from) || !objectIds.has(action.to)) {
+            issues.push(issue(scene.sceneId, `Beat "${beat.id}" has an invalid transform reference.`, {
+              severity: "error",
+              category: "schema",
+              code: "validation.schema_error",
+              layer: "validation",
+            }));
+          }
         }
-      }
-      if (action.type === "custom") {
-        const block = action.block;
-        const custom = sceneIR.customBlocks;
-        const timelineIds = new Set((custom?.timeline ?? []).map((entry) => entry.id));
-        if (!timelineIds.has(block) && !sceneIR.customBlocks?.rawConstruct) {
-          issues.push({
-            sceneId: scene.sceneId,
-            severity: "warning",
-            category: "schema",
-            message: `Custom block "${block}" is not declared in customBlocks.timeline.`,
-          });
+        if (action.type === "custom") {
+          const block = action.block;
+          const custom = sceneIR.customBlocks;
+          const timelineIds = new Set((custom?.timeline ?? []).map((entry) => entry.id));
+          if (!timelineIds.has(block) && !sceneIR.customBlocks?.rawConstruct) {
+            issues.push(issue(scene.sceneId, `Custom block "${block}" is not declared in customBlocks.timeline.`, {
+              severity: "warning",
+              category: "schema",
+              code: "validation.schema_warning",
+              layer: "validation",
+            }));
+          }
         }
       }
     }
   }
 
-  return issues;
+  return {
+    ok: !issues.some((entry) => entry.severity === "error"),
+    designMode,
+    issues,
+  };
 }
 
 function checkPythonSanity(code: string, sceneId: string): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
   if (!code.includes("from manim import")) {
-    issues.push({
-      sceneId,
+    issues.push(issue(sceneId, `Missing "from manim import *" import.`, {
       severity: "error",
       category: "python",
-      message: `Missing "from manim import *" import.`,
-    });
+      code: "validation.python_sanity_error",
+      layer: "validation",
+    }));
   }
   for (const { pattern, msg } of ALWAYS_BANNED_PATTERNS) {
     pattern.lastIndex = 0;
     if (pattern.test(code)) {
-      issues.push({
-        sceneId,
+      issues.push(issue(sceneId, msg, {
         severity: "error",
         category: "python",
-        message: msg,
-      });
+        code: "validation.python_safety_error",
+        layer: "validation",
+      }));
     }
   }
   return issues;
@@ -127,12 +208,12 @@ async function checkPythonSyntax(code: string, sceneId: string): Promise<Validat
     execFile("python3", ["-c", pythonCheck], { timeout: 10_000 }, (error, _stdout, stderr) => {
       if (error) {
         resolve([
-          {
-            sceneId,
+          issue(sceneId, `Python syntax error: ${(stderr || error.message).trim()}`, {
             severity: "error",
             category: "python",
-            message: `Python syntax error: ${(stderr || error.message).trim()}`,
-          },
+            code: "validation.python_syntax_error",
+            layer: "validation",
+          }),
         ]);
         return;
       }
@@ -146,37 +227,56 @@ export async function validateSingleScene(
   context: Pick<PipelineContext, "jobDir" | "assets">,
 ): Promise<{ scene: GeneratedScene; issues: ValidationIssue[] }> {
   const issues: ValidationIssue[] = [];
-  issues.push(...checkSceneIR(scene));
+  const schemaResult = checkSceneIR(scene);
+  issues.push(...schemaResult.issues);
   issues.push(...checkPythonSanity(scene.pythonCode, scene.sceneId));
   issues.push(...(await checkPythonSyntax(scene.pythonCode, scene.sceneId)));
 
   if (issues.some((issue) => issue.severity === "error")) {
-    throw new Error(
+    const primary = issues.find((entry) => entry.severity === "error");
+    throw new ValidationFailure(
       `Scene "${scene.sceneId}" failed validation: ${issues
         .filter((issue) => issue.severity === "error")
         .map((issue) => issue.message)
         .join("; ")}`,
+      primary?.layer ?? "validation",
+      primary?.code ?? "validation.schema_error",
     );
   }
 
-  const preflightReport = await preflightScene(scene, context.jobDir, context.assets);
+  let preflightReport;
+  try {
+    preflightReport = await preflightScene(scene, context.jobDir, context.assets);
+  } catch (error) {
+    const classified = classifyPreflightException(error);
+    const message = error instanceof Error ? error.message : String(error);
+    throw new ValidationFailure(
+      `Scene "${scene.sceneId}" failed preflight: ${message}`,
+      classified.layer,
+      classified.code,
+    );
+  }
   scene.preflightReport = preflightReport;
   issues.push(
     ...preflightReport.issues.map((issue) => ({
       sceneId: issue.sceneId,
       severity: issue.severity,
       category: issue.category,
+      code: `preflight.${issue.category}`,
+      layer: "preflight" as const,
       message: issue.message,
       suggestedFix: issue.suggestedFix,
     })),
   );
 
   if (!preflightReport.passed) {
-    throw new Error(
+    throw new ValidationFailure(
       `Scene "${scene.sceneId}" failed preflight: ${preflightReport.issues
         .filter((issue) => issue.severity === "error")
         .map((issue) => issue.message)
         .join("; ")}`,
+      "preflight",
+      "preflight.metrics_failed",
     );
   }
 
@@ -212,21 +312,41 @@ export const validateStage: PipelineStageHandler<CodegenOutput, ValidateOutput> 
         allIssues.push(...validated.issues);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        allIssues.push({
-          sceneId: scene.sceneId,
+        const layer = error instanceof ValidationFailure ? error.layer : "preflight";
+        const code = error instanceof ValidationFailure ? error.code : "preflight.failed";
+        allIssues.push(issue(scene.sceneId, message, {
           severity: "error",
-          category: "preflight",
-          message,
-        });
+          category: layer === "validation" ? "schema" : "preflight",
+          code,
+          layer,
+        }));
       }
     }
 
+    mkdirSync(join(context.jobDir, "validation"), { recursive: true });
+    writeFileSync(
+      join(context.jobDir, "validation", "report.json"),
+      JSON.stringify(
+        {
+          scenes: totalScenes,
+          passed: validScenes.length,
+          issues: allIssues,
+        },
+        null,
+        2,
+      ),
+      "utf-8",
+    );
+
     if (validScenes.length === 0) {
-      throw new Error(
+      const primary = allIssues.find((issue) => issue.severity === "error");
+      throw new ValidationFailure(
         `All scenes failed validation:\n${allIssues
           .filter((issue) => issue.severity === "error")
           .map((issue) => `[${issue.sceneId}] ${issue.message}`)
           .join("\n")}`,
+        primary?.layer ?? "validation",
+        primary?.code ?? "validation.schema_error",
       );
     }
 

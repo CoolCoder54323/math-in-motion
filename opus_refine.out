@@ -1,0 +1,407 @@
+◇ injected env (6) from .env.local // tip: ⌁ auth for agents [www.vestauth.com]
+# Implementation Plan: Pedagogical Animation Pipeline v2
+
+## Architectural Thesis
+
+The previous plan conflates "things the LLM decides" with "things a compiler enforces." LLMs are bad at: counting elements on screen, enforcing timing floors, maintaining color-to-meaning invariants across scenes, and producing consistent motion grammar. LLMs are good at: choosing *what* to teach, *which* misconception matters, *what order* of ideas, *how to phrase* narration.
+
+So we split into three layers:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ LAYER 1: POLICY (LLM)                                       │
+│   Picks pedagogical intent: role, beats, misconceptions,    │
+│   narration, semantic roles for objects.                    │
+│   Output: PlanIR (declarative, NO Python)                   │
+├─────────────────────────────────────────────────────────────┤
+│ LAYER 2: COMPILER (deterministic Python)                    │
+│   Validates PlanIR. Lowers PlanIR → Manim via templates.    │
+│   All timing, budgets, colors, focus enforced here.         │
+│   Output: SceneIR → Manim .py                               │
+├─────────────────────────────────────────────────────────────┤
+│ LAYER 3: RUNTIME (teach_primitives.py + Scene base class)   │
+│   Tracks live element set, opacity state, color registry.   │
+│   Asserts invariants at play() time. Raises on violation.   │
+└─────────────────────────────────────────────────────────────┘
+```
+
+The LLM never writes Python. It writes a typed declarative IR. This is the single biggest architectural change and the one most worth fighting for.
+
+---
+
+## 1. Schema: PlanIR (what the LLM produces)
+
+Store as `planir.schema.json` and validate with `jsonschema` before the compiler runs.
+
+```json
+{
+  "lesson": {
+    "topic": "adding-unlike-fractions",
+    "gradeBand": "3-5",
+    "learningObjective": "Student can add 1/2 + 1/3 by finding a common denominator using an area model.",
+    "priorKnowledge": ["equivalent-fractions", "area-model-for-fraction"],
+    "anchorRepresentation": "area_model",
+    "targetMisconceptions": [
+      {"id": "M1", "description": "Adds numerators and denominators directly", "addressedInScene": "s3"}
+    ],
+    "semanticRoles": {
+      "part":            {"color": "PINK",   "description": "numerator, the part we count"},
+      "whole":           {"color": "SKY",    "description": "denominator, the whole"},
+      "result":          {"color": "GRAPE",  "description": "final answer"},
+      "misconception":   {"color": "ORANGE", "description": "error to watch for"},
+      "neutral":         {"color": "INK",    "description": "structural / default"}
+    }
+  },
+  "scenes": [
+    {
+      "sceneId": "s1",
+      "role": "hook",
+      "learningBeat": "Notice that halves and thirds don't line up.",
+      "durationBudgetSec": 25,
+      "maxConcurrentElements": 5,
+      "objects": [
+        {"id": "half_bar",  "kind": "fraction_bar", "value": "1/2", "role": "part",  "pos": "LEFT"},
+        {"id": "third_bar", "kind": "fraction_bar", "value": "1/3", "role": "part",  "pos": "RIGHT"}
+      ],
+      "beats": [
+        {"type": "introduce", "targets": ["half_bar"],  "narration": "Here is one half.", "holdSec": 1.0},
+        {"type": "introduce", "targets": ["third_bar"], "narration": "And here is one third.", "holdSec": 1.0},
+        {"type": "predict", "prompt": "Can we just add the pieces?", "onScreenCue": "Add directly?", "waitSec": 3.0},
+        {"type": "focus", "targets": ["half_bar", "third_bar"], "narration": "Look — the pieces are different sizes.", "holdSec": 2.0},
+        {"type": "exit", "keep": []}
+      ]
+    }
+  ]
+}
+```
+
+### Beat vocabulary (closed set — compiler rejects anything else)
+
+| Beat type | Required fields | Compiler behavior |
+|---|---|---|
+| `introduce` | `targets`, `narration`, `holdSec` | Reveal via template; budget check; register objects |
+| `focus` | `targets`, `narration`, `holdSec` | Dim all non-targets to 0.25; Indicate targets |
+| `predict` | `prompt`, `onScreenCue≤6 words`, `waitSec≥2.0` | Enforced wait; no play() allowed during wait |
+| `reveal` | `targets`, `narration`, `holdSec` | Only after predict or focus |
+| `compare` | `targets` (exactly 2), `narration` | Side-by-side layout enforced |
+| `annotate` | `target`, `label`, `side` | Label within 0.5u; auto-removed unless `pin:true` |
+| `transform` | `from`, `to`, `narration` | Emits Transform/ReplacementTransform, not Fade+Create |
+| `fade_context` | `keep` | Fades everything not in keep to opacity 0 then removes |
+| `address_misconception` | `misconceptionId`, `narration`, `wrongVisual`, `correctVisual` | Shows wrong in ORANGE, crosses out, shows correct |
+| `synthesize` | `narration`, `keep` | Forces end-of-lesson summary layout |
+| `exit` | `keep` | Clears everything except `keep`; required as last beat |
+
+### Scene role vocabulary (closed set)
+
+`hook | activate_prior | introduce | worked_example | prediction | guided_practice | address_misconception | synthesize`
+
+### Lesson-level structural constraints (compiler-enforced)
+
+- At least one `prediction` scene OR one scene containing a `predict` beat.
+- Every `targetMisconceptions[i]` must be referenced by some `address_misconception` beat.
+- Last scene role must be `synthesize`.
+- No scene exceeds `durationBudgetSec`; total lesson ≤ 180s (configurable).
+
+---
+
+## 2. The Compiler (Layer 2)
+
+This is deterministic Python. No LLM calls. Lives in `compiler/`.
+
+```
+compiler/
+  __init__.py
+  validate.py          # JSON schema + semantic validation
+  lower.py             # PlanIR → SceneIR
+  emit.py              # SceneIR → Manim Python via Jinja templates
+  budget.py            # Element budget tracking
+  layout.py            # Deterministic positioning
+  templates/
+    scene_base.py.j2
+    beat_introduce.py.j2
+    beat_focus.py.j2
+    beat_predict.py.j2
+    ...
+```
+
+### 2.1 Validation pass (`validate.py`)
+
+Run in order; fail fast with scene-specific errors that can be fed back to the planner LLM:
+
+```python
+def validate_planir(plan: dict) -> list[ValidationError]:
+    errors = []
+    errors += _jsonschema_validate(plan)                       # shape
+    errors += _check_closed_vocabularies(plan)                 # beat.type, scene.role
+    errors += _check_role_composition(plan)                    # has predict, synthesize, etc.
+    errors += _check_misconception_coverage(plan)
+    errors += _check_beat_sequencing(plan)                     # predict → (focus|reveal), exit last
+    errors += _check_object_references(plan)                   # every target id exists
+    errors += _check_color_policy(plan)                        # no raw hex in semanticRoles
+    errors += _check_duration_budgets(plan)                    # sum(holdSec+waitSec) <= budget*1.2
+    errors += _check_element_budget_static(plan)               # simulate add/remove per scene
+    return errors
+```
+
+**Element budget simulation** — this is the check that actually prevents crowding:
+
+```python
+def _check_element_budget_static(plan):
+    errors = []
+    for scene in plan["scenes"]:
+        live = set()
+        cap = scene["maxConcurrentElements"]
+        for i, beat in enumerate(scene["beats"]):
+            if beat["type"] == "introduce":
+                live.update(beat["targets"])
+            elif beat["type"] == "fade_context":
+                live &= set(beat["keep"])
+            elif beat["type"] == "exit":
+                live &= set(beat["keep"])
+            elif beat["type"] == "address_misconception":
+                live.add(f"{beat['misconceptionId']}_wrong")
+                live.add(f"{beat['misconceptionId']}_correct")
+            if len(live) > cap:
+                errors.append(f"{scene['sceneId']} beat {i}: {len(live)} elements > cap {cap}")
+    return errors
+```
+
+### 2.2 Lowering (`lower.py`)
+
+PlanIR is pedagogical intent. SceneIR is concrete motion. The lowering pass:
+
+1. Assigns deterministic screen positions from `pos` hints via `layout.py` (grid solver with collision avoidance).
+2. Resolves `role` → color via `semanticRoles`.
+3. Expands `address_misconception` into a 4-beat sub-sequence: show-wrong → pause → cross-out → show-correct.
+4. Inserts implicit `fade_context` beats when projected budget would exceed cap.
+5. Assigns `run_time` per beat type from a fixed table (not LLM-controlled):
+
+```python
+RUN_TIMES = {
+    "introduce": 0.8, "focus": 0.6, "reveal": 0.8,
+    "transform": 1.2, "annotate": 0.5, "fade_context": 0.5, "exit": 0.5
+}
+```
+
+### 2.3 Emission (`emit.py`)
+
+Each beat type has exactly one Jinja template. The LLM can't inject arbitrary Manim. Example:
+
+```python
+# templates/beat_focus.py.j2
+# FOCUS beat: {{ beat.narration }}
+focus_targets = [{{ target_vars | join(", ") }}]
+non_targets = [m for m in self.live_mobjects() if m not in focus_targets]
+self.teach.focus(focus_targets, non_targets, narration={{ beat.narration | tojson }})
+self.wait({{ beat.holdSec }})
+```
+
+Output is a single Python file per scene that only calls primitives from `teach_primitives`. No raw `self.play` from templates means the runtime layer can audit every animation.
+
+---
+
+## 3. Runtime (Layer 3): `teach_primitives.py` + `TeachScene`
+
+```python
+# teach_primitives.py
+from manim import *
+
+class TeachScene(Scene):
+    def __init__(self, semantic_roles: dict, max_concurrent: int, **kw):
+        super().__init__(**kw)
+        self._live = {}                  # id -> Mobject
+        self._role = {}                  # id -> role name
+        self._opacity = {}               # id -> float
+        self._cap = max_concurrent
+        self._roles = semantic_roles
+        self._color_of = {r: COLOR_MAP[spec["color"]] for r, spec in semantic_roles.items()}
+        self.teach = TeachAPI(self)
+
+    def live_mobjects(self):
+        return list(self._live.values())
+
+    def register(self, obj_id: str, mobj: Mobject, role: str):
+        if len(self._live) + 1 > self._cap:
+            raise BudgetExceeded(f"Cap {self._cap} exceeded adding {obj_id}")
+        if role not in self._roles:
+            raise RoleError(f"Unknown role {role}")
+        mobj.set_color(self._color_of[role])
+        self._live[obj_id] = mobj
+        self._role[obj_id] = role
+        self._opacity[obj_id] = 1.0
+
+    def unregister(self, obj_id: str):
+        self._live.pop(obj_id, None)
+        self._opacity.pop(obj_id, None)
+
+class TeachAPI:
+    def __init__(self, scene): self.s = scene
+
+    def introduce(self, obj_id, mobj, role, narration, hold=1.0):
+        self.s.register(obj_id, mobj, role)
+        self.s.play(FadeIn(mobj, shift=0.3*DOWN), run_time=0.8)
+        self.s.wait(hold)
+
+    def focus(self, targets, others, narration, hold=2.0):
+        anims = [m.animate.set_opacity(0.25) for m in others]
+        self.s.play(*anims, *[Indicate(t, scale_factor=1.1) for t in targets], run_time=0.6)
+        for m in others:
+            obj_id = self.s._id_of(m)
+            self.s._opacity[obj_id] = 0.25
+        self.s.wait(hold)
+
+    def predict(self, prompt, cue, wait):
+        if wait < 2.0: raise PedagogyError("predict wait must be >= 2.0s")
+        if len(cue.split()) > 6: raise PedagogyError("cue must be <= 6 words")
+        q = Text(cue, color=INK).scale(0.8).to_edge(UP)
+        self.s.play(Write(q), run_time=0.5)
+        self.s.wait(wait)   # hard silence, no play() calls allowed
+        self.s._pending_predict = False
+
+    def exit(self, keep_ids):
+        to_remove = [m for oid, m in self.s._live.items() if oid not in keep_ids]
+        if to_remove:
+            self.s.play(*[FadeOut(m) for m in to_remove], run_time=0.5)
+        for oid in list(self.s._live):
+            if oid not in keep_ids: self.s.unregister(oid)
+```
+
+The runtime **raises** on violation rather than silently producing a bad animation. This is critical: it turns misuse into a regeneration signal rather than a subtle quality bug.
+
+---
+
+## 4. Validators (the four lines of defense)
+
+### 4.1 Schema validator (pre-compile)
+JSON Schema + semantic checks from §2.1. Runs in <50ms. Regen target: **planner LLM** with structured error list.
+
+### 4.2 Static linter on emitted Python (post-emit, pre-render)
+Even though emission is template-based, run an AST sanity check to catch template regressions:
+
+```python
+class PedagogyLinter(ast.NodeVisitor):
+    def visit_Call(self, node):
+        # Disallow raw self.play(FadeOut(...)) outside teach_primitives
+        # Disallow color literals outside the palette
+        # Ensure every MathTex is followed by a .next_to within N lines
+        ...
+```
+
+### 4.3 Runtime invariants (during render)
+`TeachScene` raises on:
+- Budget exceeded
+- Unknown role
+- Predict wait < 2.0s
+- Focus leaving opacity unchanged
+- Exit not called as last beat
+
+On exception, compiler captures traceback, attributes to `sceneId`, and triggers regeneration of that scene's PlanIR only.
+
+### 4.4 Post-render rubric judge (quality, not correctness)
+Sample 1 frame/sec from rendered preview. Feed to judge LLM with rubric scoring attention direction, pacing, scaffolding, visual load, semantic color consistency. Only dimensions scoring <4 trigger regeneration. Cap 2 iterations. This layer does **not** block shipping — it feeds the golden-set dashboard.
+
+---
+
+## 5. Failure Mode Taxonomy → Validator Mapping
+
+| Failure | Layer catching it | Feedback target |
+|---|---|---|
+| Plan has no prediction beats | §4.1 | Planner LLM, with "add at least one predict beat" |
+| Plan references undefined object id | §4.1 | Planner LLM |
+| Semantic role uses unknown color | §4.1 | Planner LLM |
+| Budget exceeded in scene 3 | §4.1 (static sim) | Planner LLM, with suggestion to add fade_context |
+| Template emits raw Python color hex | §4.2 | Engineering (template bug) |
+| Predict beat followed by play() during wait | §4.3 runtime | Template bug or Planner policy error |
+| Scene "feels rushed" | §4.4 judge | Planner LLM, inject "increase holdSec on focus beats" |
+| Color used inconsistently across scenes | §4.1 (policy invariant) | Planner LLM |
+| Too many objects animating simultaneously | Compiler during lowering (hard serializes) | Automatic |
+| Misconception described but never addressed | §4.1 | Planner LLM |
+
+---
+
+## 6. Planner LLM Prompt Changes
+
+The planner no longer writes code. Its prompt becomes:
+
+```
+You produce a lesson as a JSON object conforming to PlanIR schema (attached).
+You do NOT write Python. You specify pedagogical intent.
+
+HARD RULES (your output will be rejected if violated):
+- Every lesson MUST contain at least one `predict` beat.
+- Every scene in `targetMisconceptions[*].addressedInScene` MUST contain an
+  `address_misconception` beat referencing that id.
+- Last scene MUST have role "synthesize".
+- `onScreenCue` text in `predict` beats: ≤ 6 words.
+- `narration` and `onScreenCue` must NOT be verbatim duplicates.
+- Every object referenced in `beats[*].targets` MUST be declared in `objects`.
+- Assign roles from `semanticRoles` only; do not invent new roles mid-lesson.
+- `maxConcurrentElements` ≤ 6.
+
+SOFT GUIDANCE (the rubric judge scores these):
+- Front-load a hook that surfaces the target misconception.
+- Use `focus` beats liberally; dimming is free pedagogy.
+- Prefer `transform` over introduce+exit when the same concept evolves.
+```
+
+Provide 2–3 full PlanIR exemplars (fraction-add, long-division, integer-subtraction) in the few-shot context. No Manim code in the prompt at all.
+
+---
+
+## 7. Rollout (4 weeks, shippable)
+
+### Week 1 — PlanIR + validator
+- [ ] `planir.schema.json` with closed vocabularies
+- [ ] `compiler/validate.py` with all checks from §2.1
+- [ ] New planner prompt + 3 golden PlanIR exemplars
+- [ ] Round-trip test: planner output always passes or regenerates with errors
+- **Ship gate:** 10 topics produce valid PlanIR on ≤2 attempts
+
+### Week 2 — Compiler + Runtime
+- [ ] `teach_primitives.py` with `TeachScene` and all beat primitives from §3
+- [ ] Jinja templates for every beat type
+- [ ] `compiler/lower.py` with deterministic layout and implicit `fade_context` insertion
+- [ ] Runtime invariant raises wired to regeneration
+- **Ship gate:** Same 10 topics render end-to-end, no raw `self.play` outside primitives
+
+### Week 3 — Static linter + regeneration loop
+- [ ] AST linter §4.2
+- [ ] Error attribution: runtime exception → sceneId → targeted regen of that scene's PlanIR only (don't regenerate whole lesson)
+- [ ] Retry budget: 2 attempts per scene, then fall back to a simpler template
+- **Ship gate:** 20 topics, first-attempt success ≥80%, end-to-end success ≥98%
+
+### Week 4 — Rubric judge + golden set
+- [ ] Frame-sampling harness (ffmpeg 1fps from preview render)
+- [ ] Judge prompt with 6-axis rubric
+- [ ] Golden set of 20 lessons; dashboard tracks per-axis score over time
+- [ ] CI check: judge scores must not regress vs. last main
+- **Ship gate:** Golden-set mean ≥ 4.0 on all axes; no axis < 3.5
+
+---
+
+## 8. What We Are Explicitly NOT Doing
+
+- **Not** letting the LLM write Manim. Previous plan's "pattern templates per beat type" is good but insufficient if the LLM still composes them — it will stitch them wrong. Templates are rendered by the compiler, not the LLM.
+- **Not** using the judge to block shipping. Correctness gates are deterministic (§4.1–§4.3). The judge is a drift detector, not a correctness oracle — LLM judges are too noisy to gate on.
+- **Not** trying to make `maxConcurrentElements` a soft preference. It's a hard cap with automatic `fade_context` insertion during lowering. Soft limits get ignored.
+- **Not** over-parameterizing timing. Run-times are in a fixed table; the LLM only picks `holdSec` and `waitSec` per beat, bounded by schema minimums.
+
+---
+
+## 9. Key Invariants to Preserve Forever
+
+These become test assertions in CI:
+
+1. LLM output contains zero Python. (grep the planner response)
+2. Every rendered scene file imports only from `teach_primitives` and `manim`. (AST check)
+3. Every color used in rendered code traces back to a `semanticRoles` entry. (AST check)
+4. No `scene.wait(x)` where x < schema-declared waitSec. (AST check)
+5. Every `predict` beat has a registered `_pending_predict` cleared only by the runtime's `predict` primitive. (runtime check)
+
+These five invariants are what actually produce consistency across topics. Everything else is a quality nudge.
+
+---
+
+## Summary
+
+The shift is from "prompt the LLM to teach well" to "let the LLM decide pedagogical intent, then compile that intent deterministically into animation." The LLM does what it's good at (language, pedagogy selection, misconception prediction) and the compiler does what it's good at (counting, timing, color bookkeeping, layout). Validators sit at every boundary and feed structured errors back to the layer that can actually fix them.

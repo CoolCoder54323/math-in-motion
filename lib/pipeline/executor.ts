@@ -4,6 +4,7 @@ import { createJobDir, writeManifest, writeTiming, writePlan, writeConceptText, 
 import { initGalleryEntry, updateGalleryEntry, type GalleryEntryStatus } from "@/lib/gallery";
 import type { PipelineContext } from "./stage";
 import type {
+  FailureLayer,
   GeneratedScene,
   PipelineEvent,
   PipelineInput,
@@ -19,7 +20,7 @@ import type {
   ValidationIssue,
 } from "./types";
 import type { SceneStates } from "@/lib/store";
-import { calculateCost, type LLMUsage } from "./llm-usage";
+import { calculateCost, mergeUsage, type LLMUsage } from "./llm-usage";
 
 import { planStage } from "./stages/plan";
 import { codegenSingleScene } from "./stages/codegen";
@@ -32,6 +33,73 @@ import { lintScenePedagogy } from "./stages/pedagogy-lint";
 import { resolveProvider, getProviderModel } from "./llm-client";
 import { getMediaInfo, extractThumbnail } from "./ffmpeg-runner";
 import { compileScene, persistCompiledScene } from "./compiler";
+import { normalizeSceneIR } from "./scene-normalizer";
+
+function serializeUsage(usage: LLMUsage | null) {
+  if (!usage) return undefined;
+  return {
+    inputTokens: usage.inputTokens,
+    outputTokens: usage.outputTokens,
+    cacheReadTokens: usage.cacheReadTokens,
+    cacheCreationTokens: usage.cacheCreationTokens,
+    cachedTokens: usage.cachedTokens,
+    estimatedCostUSD: calculateCost(usage),
+  };
+}
+
+function errorLayer(error: unknown): FailureLayer | undefined {
+  if (error && typeof error === "object" && "layer" in error) {
+    const layer = (error as { layer?: FailureLayer }).layer;
+    if (layer) return layer;
+  }
+  return undefined;
+}
+
+function errorCode(error: unknown): string | undefined {
+  if (error && typeof error === "object" && "code" in error) {
+    return (error as { code?: string }).code;
+  }
+  return undefined;
+}
+
+function persistTimingSnapshot(params: {
+  jobDir: string;
+  ctx: PipelineContext;
+  input: PipelineInput;
+  stageTimings: StageTiming[];
+  pipelineStartedAt: number;
+  quality: "l" | "m" | "h";
+  outcome: "complete" | "failed" | "aborted" | "interrupted";
+  failedStage?: PipelineStage;
+  failureLayer?: FailureLayer;
+  failureCode?: string;
+  error?: string;
+  completedAt?: number;
+}): void {
+  const completedAt = params.completedAt ?? Date.now();
+  const totalEstimatedCostUSD = params.stageTimings.reduce(
+    (sum, s) => sum + (s.tokenUsage?.estimatedCostUSD ?? 0),
+    0,
+  );
+
+  writeTiming(params.jobDir, {
+    jobId: params.ctx.jobId,
+    mode: params.ctx.mode,
+    startedAt: params.pipelineStartedAt,
+    completedAt,
+    totalMs: completedAt - params.pipelineStartedAt,
+    outcome: params.outcome,
+    failedStage: params.failedStage,
+    failureLayer: params.failureLayer,
+    failureCode: params.failureCode,
+    error: params.error,
+    quality: params.quality,
+    conceptText: params.input.conceptText,
+    latexProblem: params.input.latexProblem,
+    totalEstimatedCostUSD,
+    stages: params.stageTimings,
+  });
+}
 
 /* ------------------------------------------------------------------ */
 /*  Gallery status updates at stage transitions                         */
@@ -80,7 +148,7 @@ async function updateGalleryStage(jobId: string, stage: PipelineStage): Promise<
 
 function generateThumbnailCode(title: string): GeneratedScene {
   return compileScene(
-    {
+    normalizeSceneIR({
       metadata: {
         sceneId: "thumbnail",
         role: "hook",
@@ -131,7 +199,7 @@ function generateThumbnailCode(title: string): GeneratedScene {
           holdSeconds: 0.2,
         },
       ],
-    },
+    }),
     "ThumbnailScene",
   );
 }
@@ -510,10 +578,11 @@ async function confirmationGate(
   ctx: PipelineContext,
   controller: PipelineController,
   renderOutput: RenderOutput,
+  totalScenes: number,
   onEvent: (event: PipelineEvent) => void,
 ): Promise<void> {
-  const totalScenes = controller.currentPlan!.sceneBreakdown.length;
   const failedCount = renderOutput.failures.length;
+  const denominator = Math.max(1, totalScenes);
 
   // Auto-continue ON + zero failures = proceed immediately
   if (controller.autoContinue && failedCount === 0) return;
@@ -526,7 +595,7 @@ async function confirmationGate(
     type: "pipeline-awaiting-confirmation",
     failedCount,
     totalScenes,
-    canContinue: failedCount / totalScenes <= 0.20,
+    canContinue: failedCount / denominator <= 0.20,
   });
 
   const confirmationPromise = new Promise<void>((resolve) => {
@@ -601,7 +670,7 @@ export async function processScene(params: {
         generated = generateThumbnailCode(plan.title);
         persistCompiledScene(ctx.jobDir, generated);
       } else {
-        const { scene: g, usage } = await codegenSingleScene(
+        const { scene: g, usage, cacheHit } = await codegenSingleScene(
           scene,
           plan,
           ctx,
@@ -609,7 +678,9 @@ export async function processScene(params: {
           errorFeedback,
         );
         generated = g;
-        if (usage) sceneUsage = usage;
+        if (!cacheHit && usage) {
+          sceneUsage = mergeUsage(sceneUsage, usage);
+        }
       }
       currentCodegenMs = Date.now() - codegenStart;
 
@@ -631,16 +702,9 @@ export async function processScene(params: {
         type: "scene-failed",
         sceneId: scene.sceneId,
         error: msg,
-        tokenUsage: sceneUsage
-          ? {
-              inputTokens: sceneUsage.inputTokens,
-              outputTokens: sceneUsage.outputTokens,
-              cacheReadTokens: sceneUsage.cacheReadTokens,
-              cacheCreationTokens: sceneUsage.cacheCreationTokens,
-              cachedTokens: sceneUsage.cachedTokens,
-              estimatedCostUSD: calculateCost(sceneUsage),
-            }
-          : undefined,
+        layer: errorLayer(err),
+        code: errorCode(err),
+        tokenUsage: serializeUsage(sceneUsage),
       });
       return {
         sceneId: scene.sceneId,
@@ -648,16 +712,7 @@ export async function processScene(params: {
         validateMs: currentValidateMs,
         renderMs: currentRenderMs,
         totalMs: currentCodegenMs + currentValidateMs + currentRenderMs,
-        tokenUsage: sceneUsage
-          ? {
-              inputTokens: sceneUsage.inputTokens,
-              outputTokens: sceneUsage.outputTokens,
-              cacheReadTokens: sceneUsage.cacheReadTokens,
-              cacheCreationTokens: sceneUsage.cacheCreationTokens,
-              cachedTokens: sceneUsage.cachedTokens,
-              estimatedCostUSD: calculateCost(sceneUsage),
-            }
-          : undefined,
+        tokenUsage: serializeUsage(sceneUsage),
       };
     }
 
@@ -752,16 +807,7 @@ export async function processScene(params: {
         sceneId: scene.sceneId,
         clipUrl,
         durationSeconds,
-        tokenUsage: sceneUsage
-          ? {
-              inputTokens: sceneUsage.inputTokens,
-              outputTokens: sceneUsage.outputTokens,
-              cacheReadTokens: sceneUsage.cacheReadTokens,
-              cacheCreationTokens: sceneUsage.cacheCreationTokens,
-              cachedTokens: sceneUsage.cachedTokens,
-              estimatedCostUSD: calculateCost(sceneUsage),
-            }
-          : undefined,
+        tokenUsage: serializeUsage(sceneUsage),
       });
 
       return {
@@ -770,16 +816,7 @@ export async function processScene(params: {
         validateMs,
         renderMs,
         totalMs: codegenMs + validateMs + renderMs,
-        tokenUsage: sceneUsage
-          ? {
-              inputTokens: sceneUsage.inputTokens,
-              outputTokens: sceneUsage.outputTokens,
-              cacheReadTokens: sceneUsage.cacheReadTokens,
-              cacheCreationTokens: sceneUsage.cacheCreationTokens,
-              cachedTokens: sceneUsage.cachedTokens,
-              estimatedCostUSD: calculateCost(sceneUsage),
-            }
-          : undefined,
+        tokenUsage: serializeUsage(sceneUsage),
       };
     } catch (err) {
       if (attempt < maxAttempts - 1) {
@@ -794,16 +831,9 @@ export async function processScene(params: {
         type: "scene-failed",
         sceneId: scene.sceneId,
         error: message,
-        tokenUsage: sceneUsage
-          ? {
-              inputTokens: sceneUsage.inputTokens,
-              outputTokens: sceneUsage.outputTokens,
-              cacheReadTokens: sceneUsage.cacheReadTokens,
-              cacheCreationTokens: sceneUsage.cacheCreationTokens,
-              cachedTokens: sceneUsage.cachedTokens,
-              estimatedCostUSD: calculateCost(sceneUsage),
-            }
-          : undefined,
+        layer: errorLayer(err),
+        code: errorCode(err),
+        tokenUsage: serializeUsage(sceneUsage),
       });
       return {
         sceneId: scene.sceneId,
@@ -811,16 +841,7 @@ export async function processScene(params: {
         validateMs: currentValidateMs,
         renderMs: currentRenderMs,
         totalMs: currentCodegenMs + currentValidateMs + currentRenderMs,
-        tokenUsage: sceneUsage
-          ? {
-              inputTokens: sceneUsage.inputTokens,
-              outputTokens: sceneUsage.outputTokens,
-              cacheReadTokens: sceneUsage.cacheReadTokens,
-              cacheCreationTokens: sceneUsage.cacheCreationTokens,
-              cachedTokens: sceneUsage.cachedTokens,
-              estimatedCostUSD: calculateCost(sceneUsage),
-            }
-          : undefined,
+        tokenUsage: serializeUsage(sceneUsage),
       };
     }
   }
@@ -902,6 +923,9 @@ async function executeLessonPipeline(
   let codegenModel = "";
   let codegenPromptSummary = "";
   const workshopSceneTimings: SceneTiming[] = [];
+  let lessonCodegenElapsedMs = 0;
+  let lessonValidateElapsedMs = 0;
+  let lessonRenderElapsedMs = 0;
 
   try {
     // ── Stage 1: Plan ─────────────────────────────────────────────────
@@ -949,16 +973,7 @@ async function executeLessonPipeline(
       stage: "plan",
       totalMs: planTimingMs,
       ...(planProvider && { llmProvider: planProvider, llmModel: planModel, promptSummary: planPromptSummary }),
-      ...(planUsage && {
-        tokenUsage: {
-          inputTokens: planUsage.inputTokens,
-          outputTokens: planUsage.outputTokens,
-          cacheReadTokens: planUsage.cacheReadTokens,
-          cacheCreationTokens: planUsage.cacheCreationTokens,
-          cachedTokens: planUsage.cachedTokens,
-          estimatedCostUSD: calculateCost(planUsage),
-        },
-      }),
+      ...(planUsage && { tokenUsage: serializeUsage(planUsage) }),
     });
 
     controller.currentPlan = planOutput;
@@ -994,6 +1009,7 @@ async function executeLessonPipeline(
     let renderOutput: RenderOutput;
 
     if (shouldSkip("codegen") && input.cachedScenes?.length) {
+      const lessonStart = Date.now();
       const codegenOutput = { scenes: input.cachedScenes };
       const skipResult: StageResult = {
         stage: "codegen",
@@ -1046,12 +1062,22 @@ async function executeLessonPipeline(
         signal,
       );
       renderOutput = renderResult.output;
+      const lessonElapsedMs = Date.now() - lessonStart;
+      lessonCodegenElapsedMs = lessonElapsedMs;
+      lessonValidateElapsedMs = lessonElapsedMs;
+      lessonRenderElapsedMs = lessonElapsedMs;
 
       if (renderOutput.clips.length === 0) {
         throw new StageError("render", "All scenes failed to render.");
       }
 
-      await confirmationGate(ctx, controller, renderOutput, onEvent);
+      await confirmationGate(
+        ctx,
+        controller,
+        renderOutput,
+        controller.currentPlan?.sceneBreakdown.length ?? renderOutput.clips.length + renderOutput.failures.length,
+        onEvent,
+      );
       if (signal?.aborted) throw new StageError("render", "Pipeline aborted.");
 
       for (const clip of renderOutput.clips) {
@@ -1083,6 +1109,7 @@ async function executeLessonPipeline(
 
       const SCENE_CONCURRENCY = 7;
       const scenes = controller.currentPlan!.sceneBreakdown;
+      const lessonStart = Date.now();
 
       for (let batchStart = 0; batchStart < scenes.length; batchStart += SCENE_CONCURRENCY) {
         if (signal?.aborted) break;
@@ -1172,7 +1199,13 @@ async function executeLessonPipeline(
 
       renderOutput = { clips, failures };
 
-      await confirmationGate(ctx, controller, renderOutput, onEvent);
+      await confirmationGate(
+        ctx,
+        controller,
+        renderOutput,
+        controller.currentPlan?.sceneBreakdown.length ?? renderOutput.clips.length + renderOutput.failures.length,
+        onEvent,
+      );
       if (signal?.aborted) throw new StageError("render", "Pipeline aborted.");
 
       const renderStageResult: StageResult = {
@@ -1194,11 +1227,22 @@ async function executeLessonPipeline(
           console.warn(`[executeLessonPipeline] Failed to extract thumbnail for ${ctx.jobId}:`, thumbErr);
         }
       }
+      const lessonElapsedMs = Date.now() - lessonStart;
+      lessonCodegenElapsedMs = lessonElapsedMs;
+      lessonValidateElapsedMs = lessonElapsedMs;
+      lessonRenderElapsedMs = lessonElapsedMs;
     }
+
+    const successfulSceneCount = workshopSceneTimings.filter((s) => s.renderMs > 0).length;
+    const failedSceneCount = workshopSceneTimings.length - successfulSceneCount;
 
     stageTimings.push({
       stage: "codegen",
-      totalMs: workshopSceneTimings.reduce((sum, s) => sum + s.codegenMs, 0),
+      totalMs: lessonCodegenElapsedMs || workshopSceneTimings.reduce((sum, s) => sum + s.codegenMs, 0),
+      elapsedMs: lessonCodegenElapsedMs || undefined,
+      aggregateWorkMs: workshopSceneTimings.reduce((sum, s) => sum + s.codegenMs, 0),
+      successfulScenes: successfulSceneCount,
+      failedScenes: failedSceneCount,
       ...(codegenProvider && { llmProvider: codegenProvider, llmModel: codegenModel, promptSummary: codegenPromptSummary }),
       sceneTimings: workshopSceneTimings.length > 0 ? workshopSceneTimings : undefined,
       ...(workshopSceneTimings.length > 0 && {
@@ -1215,12 +1259,20 @@ async function executeLessonPipeline(
 
     stageTimings.push({
       stage: "validate",
-      totalMs: workshopSceneTimings.reduce((sum, s) => sum + s.validateMs, 0),
+      totalMs: lessonValidateElapsedMs || workshopSceneTimings.reduce((sum, s) => sum + s.validateMs, 0),
+      elapsedMs: lessonValidateElapsedMs || undefined,
+      aggregateWorkMs: workshopSceneTimings.reduce((sum, s) => sum + s.validateMs, 0),
+      successfulScenes: successfulSceneCount,
+      failedScenes: failedSceneCount,
     });
 
     stageTimings.push({
       stage: "render",
-      totalMs: workshopSceneTimings.reduce((sum, s) => sum + s.renderMs, 0),
+      totalMs: lessonRenderElapsedMs || workshopSceneTimings.reduce((sum, s) => sum + s.renderMs, 0),
+      elapsedMs: lessonRenderElapsedMs || undefined,
+      aggregateWorkMs: workshopSceneTimings.reduce((sum, s) => sum + s.renderMs, 0),
+      successfulScenes: successfulSceneCount,
+      failedScenes: failedSceneCount,
     });
 
     await pauseGate(ctx, controller, "postprocess", onEvent);
@@ -1304,29 +1356,41 @@ async function executeLessonPipeline(
     };
 
     const completedAt = Date.now();
-    const totalEstimatedCostUSD = stageTimings.reduce((sum, s) => sum + (s.tokenUsage?.estimatedCostUSD ?? 0), 0);
     writeManifest(jobDir, manifest);
-    writeTiming(jobDir, {
-      jobId: ctx.jobId,
-      mode: "lesson",
-      startedAt: pipelineStartedAt,
-      completedAt,
-      totalMs: completedAt - pipelineStartedAt,
+    persistTimingSnapshot({
+      jobDir,
+      ctx,
+      input,
+      stageTimings,
+      pipelineStartedAt,
       quality,
-      conceptText: input.conceptText,
-      latexProblem: input.latexProblem,
-      totalEstimatedCostUSD,
-      stages: stageTimings,
+      outcome: "complete",
+      completedAt,
     });
     onEvent({ type: "pipeline-complete", manifest });
     return manifest;
   } catch (err) {
     const failedStage =
       err instanceof StageError ? err.stage : ("plan" as PipelineStage);
+    const failureLayer = errorLayer(err) ?? "pipeline";
+    const failureCode = errorCode(err) ?? `pipeline.${failedStage}_failed`;
     const message = err instanceof Error ? err.message : "Unknown pipeline error";
 
     manifest.status = "failed";
     writeManifest(jobDir, manifest);
+    persistTimingSnapshot({
+      jobDir,
+      ctx,
+      input,
+      stageTimings,
+      pipelineStartedAt,
+      quality,
+      outcome: signal?.aborted ? "aborted" : "failed",
+      failedStage,
+      failureLayer,
+      failureCode,
+      error: message,
+    });
     try {
       await updateGalleryEntry(ctx.jobId, {
         status: "failed",
@@ -1335,7 +1399,7 @@ async function executeLessonPipeline(
     } catch (galleryErr) {
       console.warn(`[executeLessonPipeline] Failed to update gallery on error for ${ctx.jobId}:`, galleryErr);
     }
-    onEvent({ type: "pipeline-error", error: message, failedStage });
+    onEvent({ type: "pipeline-error", error: message, failedStage, layer: failureLayer, code: failureCode });
     return manifest;
   }
 }
@@ -1392,16 +1456,7 @@ async function executeVizPipeline(
       llmProvider: vizMeta.provider,
       llmModel: vizMeta.model,
       promptSummary: vizPromptSummary,
-      ...(vizUsage && {
-        tokenUsage: {
-          inputTokens: vizUsage.inputTokens,
-          outputTokens: vizUsage.outputTokens,
-          cacheReadTokens: vizUsage.cacheReadTokens,
-          cacheCreationTokens: vizUsage.cacheCreationTokens,
-          cachedTokens: vizUsage.cachedTokens,
-          estimatedCostUSD: calculateCost(vizUsage),
-        },
-      }),
+      ...(vizUsage && { tokenUsage: serializeUsage(vizUsage) }),
     });
 
     await pauseGate(ctx, controller, "validate", onEvent);
@@ -1451,7 +1506,13 @@ async function executeVizPipeline(
       throw new StageError("render", "All scenes failed to render.");
     }
 
-    await confirmationGate(ctx, controller, renderOutput, onEvent);
+    await confirmationGate(
+      ctx,
+      controller,
+      renderOutput,
+      codegenOutput.scenes.length || renderOutput.clips.length + renderOutput.failures.length,
+      onEvent,
+    );
     if (signal?.aborted) throw new StageError("render", "Pipeline aborted.");
 
     const clip = renderOutput.clips[0];
@@ -1477,29 +1538,41 @@ async function executeVizPipeline(
     };
 
     const completedAt = Date.now();
-    const totalEstimatedCostUSD = stageTimings.reduce((sum, s) => sum + (s.tokenUsage?.estimatedCostUSD ?? 0), 0);
     writeManifest(jobDir, manifest);
-    writeTiming(jobDir, {
-      jobId: ctx.jobId,
-      mode: "viz",
-      startedAt: pipelineStartedAt,
-      completedAt,
-      totalMs: completedAt - pipelineStartedAt,
+    persistTimingSnapshot({
+      jobDir,
+      ctx,
+      input,
+      stageTimings,
+      pipelineStartedAt,
       quality,
-      conceptText: input.conceptText,
-      latexProblem: input.latexProblem,
-      totalEstimatedCostUSD,
-      stages: stageTimings,
+      outcome: "complete",
+      completedAt,
     });
     onEvent({ type: "pipeline-complete", manifest });
     return manifest;
   } catch (err) {
     const failedStage =
       err instanceof StageError ? err.stage : ("codegen" as PipelineStage);
+    const failureLayer = errorLayer(err) ?? "pipeline";
+    const failureCode = errorCode(err) ?? `pipeline.${failedStage}_failed`;
     const message = err instanceof Error ? err.message : "Unknown pipeline error";
 
     manifest.status = "failed";
     writeManifest(jobDir, manifest);
+    persistTimingSnapshot({
+      jobDir,
+      ctx,
+      input,
+      stageTimings,
+      pipelineStartedAt,
+      quality,
+      outcome: signal?.aborted ? "aborted" : "failed",
+      failedStage,
+      failureLayer,
+      failureCode,
+      error: message,
+    });
     try {
       await updateGalleryEntry(ctx.jobId, {
         status: "failed",
@@ -1508,7 +1581,7 @@ async function executeVizPipeline(
     } catch (galleryErr) {
       console.warn(`[executeVizPipeline] Failed to update gallery on error for ${ctx.jobId}:`, galleryErr);
     }
-    onEvent({ type: "pipeline-error", error: message, failedStage });
+    onEvent({ type: "pipeline-error", error: message, failedStage, layer: failureLayer, code: failureCode });
     return manifest;
   }
 }
@@ -1521,6 +1594,8 @@ class StageError extends Error {
   constructor(
     public stage: PipelineStage,
     message: string,
+    public layer: FailureLayer = "pipeline",
+    public code: string = `pipeline.${stage}_failed`,
   ) {
     super(message);
     this.name = "StageError";
@@ -1544,7 +1619,7 @@ async function runStage<T>(
   signal?: AbortSignal,
 ): Promise<{ output: T; result: StageResult }> {
   if (signal?.aborted) {
-    throw new StageError(stage, "Pipeline aborted.");
+    throw new StageError(stage, "Pipeline aborted.", "pipeline", "pipeline.aborted");
   }
 
   onEvent({ type: "stage-start", stage });
@@ -1558,7 +1633,7 @@ async function runStage<T>(
     while (!iterResult.done) {
       if (signal?.aborted) {
         await gen.return(undefined as unknown as T);
-        throw new StageError(stage, "Pipeline aborted.");
+        throw new StageError(stage, "Pipeline aborted.", "pipeline", "pipeline.aborted");
       }
       onEvent(iterResult.value);
       iterResult = await gen.next();
@@ -1588,6 +1663,11 @@ async function runStage<T>(
     onEvent({ type: "stage-complete", stage, result: stageResult });
 
     if (err instanceof StageError) throw err;
-    throw new StageError(stage, message);
+    throw new StageError(
+      stage,
+      message,
+      errorLayer(err) ?? "pipeline",
+      errorCode(err) ?? `pipeline.${stage}_failed`,
+    );
   }
 }

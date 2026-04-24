@@ -1,0 +1,21 @@
+{
+  "full": {
+    "ok": true,
+    "elapsed": 81277,
+    "promptTokens": 37785,
+    "completionTokens": 2004,
+    "status": 200
+  },
+  "compressed": {
+    "ok": true,
+    "elapsed": 70197,
+    "promptTokens": 16211,
+    "completionTokens": 1783,
+    "status": 200
+  },
+  "sizes": {
+    "full": 121527,
+    "compressed": 51057
+  },
+  "timestamp": "2026-04-22T03:09:39.491Z"
+}

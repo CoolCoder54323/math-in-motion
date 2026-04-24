@@ -1,0 +1,100 @@
+
+> math-in-motion@0.1.0 dev
+> next dev
+
+▲ Next.js 16.2.3 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://10.196.79.27:3000
+- Environments: .env.local
+✓ Ready in 220ms
+
+ GET / 200 in 349ms (next.js: 124ms, application-code: 225ms)
+ GET / 200 in 39ms (next.js: 2ms, application-code: 37ms)
+ GET /login 200 in 38ms (next.js: 18ms, application-code: 20ms)
+ GET /workshop 200 in 45ms (next.js: 15ms, application-code: 30ms)
+ POST /api/pipeline 200 in 1774ms (next.js: 93ms, application-code: 1680ms)
+ GET /animations 200 in 64ms (next.js: 27ms, application-code: 37ms)
+ GET /api/gallery 200 in 47ms (next.js: 34ms, application-code: 13ms)
+ GET /api/gallery 200 in 5ms (next.js: 1098µs, application-code: 4ms)
+ GET /api/video/afb4a26f-c834-4e64-b2ef-a0b7697e58c7 200 in 651ms (next.js: 627ms, application-code: 23ms)
+ GET /api/video/c4889277-910b-4f7d-89fe-7ff9d7fc1cec 200 in 729ms (next.js: 699ms, application-code: 30ms)
+ GET /api/video/531bcfa8-2583-4837-895f-5246bb177c55 200 in 660ms (next.js: 627ms, application-code: 33ms)
+ GET /api/video/75d07f74-137f-4397-bf75-434988a8133c 200 in 657ms (next.js: 623ms, application-code: 34ms)
+ GET /api/video/bb8daabf-8685-41fc-a2f1-8204e46d770f 200 in 658ms (next.js: 624ms, application-code: 34ms)
+ GET /api/video/d5b302ad-ed11-4fd5-a06f-3bd3288b2d19 200 in 670ms (next.js: 623ms, application-code: 47ms)
+ GET /workshop 200 in 30ms (next.js: 3ms, application-code: 27ms)
+ POST /api/pipeline 200 in 1384ms (next.js: 1836µs, application-code: 1382ms)
+ GET / 200 in 72ms (next.js: 5ms, application-code: 67ms)
+ POST /api/pipeline 200 in 1357ms (next.js: 1672µs, application-code: 1355ms)
+ POST /api/pipeline 200 in 1372ms (next.js: 5ms, application-code: 1367ms)
+ POST /api/pipeline 200 in 11.5s (next.js: 160ms, application-code: 11.4s)
+ POST /api/pipeline/ae27f168-c1b4-41a9-82a1-3cf166d12a55/control 404 in 1298ms (next.js: 1288ms, application-code: 10ms)
+ POST /api/pipeline/ae27f168-c1b4-41a9-82a1-3cf166d12a55/control 404 in 1092ms (next.js: 1080ms, application-code: 12ms)
+⚠ Server is approaching the used memory threshold, restarting...
+⚠ Server is approaching the used memory threshold, restarting...
+▲ Next.js 16.2.3 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://10.196.79.27:3000
+- Environments: .env.local
+✓ Ready in 225ms
+
+[browser] ⨯ unhandledRejection: TypeError: NetworkError when attempting to fetch resource.
+
+ GET /workshop 200 in 291ms (next.js: 98ms, application-code: 193ms)
+ POST /api/pipeline 200 in 1550ms (next.js: 107ms, application-code: 1442ms)
+ POST /api/pipeline 200 in 1368ms (next.js: 6ms, application-code: 1362ms)
+ POST /api/pipeline 200 in 16.4s (next.js: 181ms, application-code: 16.3s)
+⚠ Server is approaching the used memory threshold, restarting...
+▲ Next.js 16.2.3 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://10.196.79.27:3000
+- Environments: .env.local
+✓ Ready in 299ms
+
+ GET /workshop 200 in 322ms (next.js: 118ms, application-code: 204ms)
+
+<--- Last few GCs --->
+
+[41615:0x130018000]   791978 ms: Scavenge 7550.4 (8222.6) -> 7543.2 (8222.6) MB, pooled: 0 MB, 64.42 / 0.00 ms  (average mu = 0.288, current mu = 0.270) allocation failure; 
+[41615:0x130018000]   807098 ms: Mark-Compact 7556.4 (8224.3) -> 7429.6 (8173.3) MB, pooled: 10 MB, 15078.62 / 248.92 ms  (average mu = 0.280, current mu = 0.273) allocation failure; scavenge might not succeed
+
+
+<--- JS stacktrace --->
+
+FATAL ERROR: Ineffective mark-compacts near heap limit Allocation failed - JavaScript heap out of memory
+----- Native stack trace -----
+
+ 1: 0x10497474c node::OOMErrorHandler(char const*, v8::OOMDetails const&) [/opt/homebrew/Cellar/node@22/22.13.1/bin/node]
+ 2: 0x104b1c12c v8::Utils::ReportOOMFailure(v8::internal::Isolate*, char const*, v8::OOMDetails const&) [/opt/homebrew/Cellar/node@22/22.13.1/bin/node]
+ 3: 0x104b1c0e0 v8::internal::V8::FatalProcessOutOfMemory(v8::internal::Isolate*, char const*, v8::OOMDetails const&) [/opt/homebrew/Cellar/node@22/22.13.1/bin/node]
+ 4: 0x104cc1b14 v8::internal::Heap::CallGCPrologueCallbacks(v8::GCType, v8::GCCallbackFlags, v8::internal::GCTracer::Scope::ScopeId) [/opt/homebrew/Cellar/node@22/22.13.1/bin/node]
+ 5: 0x104cc385c v8::internal::Heap::DevToolsTraceEventScope::~DevToolsTraceEventScope() [/opt/homebrew/Cellar/node@22/22.13.1/bin/node]
+ 6: 0x104cc21cc v8::internal::Heap::CollectGarbage(v8::internal::AllocationSpace, v8::internal::GarbageCollectionReason, v8::GCCallbackFlags)::$_1::operator()() const [/opt/homebrew/Cellar/node@22/22.13.1/bin/node]
+ 7: 0x104cc1e80 void heap::base::Stack::SetMarkerAndCallbackImpl<v8::internal::Heap::CollectGarbage(v8::internal::AllocationSpace, v8::internal::GarbageCollectionReason, v8::GCCallbackFlags)::$_1>(heap::base::Stack*, void*, void const*) [/opt/homebrew/Cellar/node@22/22.13.1/bin/node]
+ 8: 0x104884028 PushAllRegistersAndIterateStack [/opt/homebrew/Cellar/node@22/22.13.1/bin/node]
+ 9: 0x104cc083c v8::internal::Heap::CollectGarbage(v8::internal::AllocationSpace, v8::internal::GarbageCollectionReason, v8::GCCallbackFlags) [/opt/homebrew/Cellar/node@22/22.13.1/bin/node]
+10: 0x104cb6e24 v8::internal::HeapAllocator::AllocateRawWithLightRetrySlowPath(int, v8::internal::AllocationType, v8::internal::AllocationOrigin, v8::internal::AllocationAlignment) [/opt/homebrew/Cellar/node@22/22.13.1/bin/node]
+11: 0x104cb7590 v8::internal::HeapAllocator::AllocateRawWithRetryOrFailSlowPath(int, v8::internal::AllocationType, v8::internal::AllocationOrigin, v8::internal::AllocationAlignment) [/opt/homebrew/Cellar/node@22/22.13.1/bin/node]
+12: 0x104c9e6ec v8::internal::Factory::AllocateRawWithAllocationSite(v8::internal::Handle<v8::internal::Map>, v8::internal::AllocationType, v8::internal::Handle<v8::internal::AllocationSite>) [/opt/homebrew/Cellar/node@22/22.13.1/bin/node]
+13: 0x104ca231c v8::internal::Factory::NewJSObjectFromMap(v8::internal::Handle<v8::internal::Map>, v8::internal::AllocationType, v8::internal::Handle<v8::internal::AllocationSite>) [/opt/homebrew/Cellar/node@22/22.13.1/bin/node]
+14: 0x104caa798 v8::internal::Factory::NewJSArrayWithUnverifiedElements(v8::internal::Handle<v8::internal::Map>, v8::internal::Handle<v8::internal::FixedArrayBase>, int, v8::internal::AllocationType) [/opt/homebrew/Cellar/node@22/22.13.1/bin/node]
+15: 0x104b36224 v8::Array::New(v8::Isolate*, int) [/opt/homebrew/Cellar/node@22/22.13.1/bin/node]
+16: 0x10491d420 napi_create_array_with_length [/opt/homebrew/Cellar/node@22/22.13.1/bin/node]
+17: 0x160c6508c BrotliDecoderVersion [/Users/nicholasdixon/Projects/Math In Motion/math-in-motion/node_modules/@next/swc-darwin-arm64/next-swc.darwin-arm64.node]
+18: 0x161b0afe8 napi_register_module_v1 [/Users/nicholasdixon/Projects/Math In Motion/math-in-motion/node_modules/@next/swc-darwin-arm64/next-swc.darwin-arm64.node]
+19: 0x1618f1cb4 napi_register_module_v1 [/Users/nicholasdixon/Projects/Math In Motion/math-in-motion/node_modules/@next/swc-darwin-arm64/next-swc.darwin-arm64.node]
+20: 0x161928224 napi_register_module_v1 [/Users/nicholasdixon/Projects/Math In Motion/math-in-motion/node_modules/@next/swc-darwin-arm64/next-swc.darwin-arm64.node]
+21: 0x161c1ecc4 napi_register_module_v1 [/Users/nicholasdixon/Projects/Math In Motion/math-in-motion/node_modules/@next/swc-darwin-arm64/next-swc.darwin-arm64.node]
+22: 0x161bb1640 napi_register_module_v1 [/Users/nicholasdixon/Projects/Math In Motion/math-in-motion/node_modules/@next/swc-darwin-arm64/next-swc.darwin-arm64.node]
+23: 0x161b00590 napi_register_module_v1 [/Users/nicholasdixon/Projects/Math In Motion/math-in-motion/node_modules/@next/swc-darwin-arm64/next-swc.darwin-arm64.node]
+24: 0x161c18224 napi_register_module_v1 [/Users/nicholasdixon/Projects/Math In Motion/math-in-motion/node_modules/@next/swc-darwin-arm64/next-swc.darwin-arm64.node]
+25: 0x1618fe99c napi_register_module_v1 [/Users/nicholasdixon/Projects/Math In Motion/math-in-motion/node_modules/@next/swc-darwin-arm64/next-swc.darwin-arm64.node]
+26: 0x104938624 v8impl::(anonymous namespace)::ThreadSafeFunction::AsyncCb(uv_async_s*) [/opt/homebrew/Cellar/node@22/22.13.1/bin/node]
+27: 0x108c51a74 uv__async_io [/opt/homebrew/Cellar/libuv/1.50.0/lib/libuv.1.dylib]
+28: 0x108c6201c uv__io_poll [/opt/homebrew/Cellar/libuv/1.50.0/lib/libuv.1.dylib]
+29: 0x108c51f08 uv_run [/opt/homebrew/Cellar/libuv/1.50.0/lib/libuv.1.dylib]
+30: 0x104886428 node::SpinEventLoopInternal(node::Environment*) [/opt/homebrew/Cellar/node@22/22.13.1/bin/node]
+31: 0x1049be8b8 node::NodeMainInstance::Run(node::ExitCode*, node::Environment*) [/opt/homebrew/Cellar/node@22/22.13.1/bin/node]
+32: 0x1049be60c node::NodeMainInstance::Run() [/opt/homebrew/Cellar/node@22/22.13.1/bin/node]
+33: 0x104934ca0 node::Start(int, char**) [/opt/homebrew/Cellar/node@22/22.13.1/bin/node]
+34: 0x192202b98 start [/usr/lib/dyld]

@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { listControllers } from "@/lib/pipeline/executor";
 import { getGalleryEntries } from "@/lib/gallery";
 import {
@@ -12,8 +12,33 @@ import {
 } from "@/lib/pipeline/job-manager";
 import type { PipelineTiming } from "@/lib/pipeline/types";
 import type { SceneStates } from "@/lib/store";
-import { existsSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
+
+export const dynamic = "force-dynamic";
+
+const STATUS_CACHE_TTL_MS = 2_000;
+
+let statusCache:
+  | {
+      expiresAt: number;
+      payload: unknown;
+    }
+  | null = null;
+
+function isAuthorized(request: NextRequest): boolean {
+  if (process.env.NODE_ENV !== "production") {
+    return true;
+  }
+
+  const expected = process.env.ADMIN_STATUS_TOKEN;
+  if (!expected) return false;
+
+  const bearer = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
+  const headerToken = request.headers.get("x-admin-token");
+  const queryToken = request.nextUrl.searchParams.get("token");
+  return bearer === expected || headerToken === expected || queryToken === expected;
+}
 
 function getDiskUsage(dir: string): { size: number; fileCount: number } {
   if (!existsSync(dir)) return { size: 0, fileCount: 0 };
@@ -44,6 +69,24 @@ function formatBytes(bytes: number): string {
   const sizes = ["B", "KB", "MB", "GB", "TB"];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   return `${(bytes / Math.pow(k, i)).toFixed(2)} ${sizes[i]}`;
+}
+
+function countNormalizationWarnings(jobDir: string): number {
+  const sceneIrDir = join(jobDir, "scene-ir");
+  if (!existsSync(sceneIrDir)) return 0;
+  let count = 0;
+  try {
+    for (const file of readdirSync(sceneIrDir)) {
+      if (!file.endsWith(".normalized.json")) continue;
+      const parsed = JSON.parse(readFileSync(join(sceneIrDir, file), "utf-8")) as {
+        normalizationIssues?: { severity?: string }[];
+      };
+      count += (parsed.normalizationIssues ?? []).filter((issue) => issue.severity !== "info").length;
+    }
+  } catch {
+    return count;
+  }
+  return count;
 }
 
 type TokenAggregate = {
@@ -102,7 +145,16 @@ function tokensFromTiming(timing: PipelineTiming | null): TokenAggregate {
   return agg;
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  if (!isAuthorized(request)) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  const now = Date.now();
+  if (statusCache && statusCache.expiresAt > now) {
+    return NextResponse.json(statusCache.payload);
+  }
+
   const active = listControllers().map(({ jobId, controller }) => ({
     jobId,
     currentStage: controller.ctx.manifest.currentStage ?? null,
@@ -142,6 +194,14 @@ export async function GET() {
     clipsCount: number;
     diskUsage: string;
     tokens: TokenAggregate;
+    timing: {
+      outcome: PipelineTiming["outcome"];
+      totalMs: number;
+      failedStage?: PipelineTiming["failedStage"];
+      failureLayer?: PipelineTiming["failureLayer"];
+      failureCode?: PipelineTiming["failureCode"];
+    } | null;
+    normalizationWarnings: number;
   }[] = [];
 
   let totalTokens = zeroTokens();
@@ -175,12 +235,12 @@ export async function GET() {
       // Provider breakdown from timing
       if (timing) {
         for (const stage of timing.stages ?? []) {
-          const key = stage.llmProvider && stage.llmModel
-            ? `${stage.llmProvider}/${stage.llmModel}`
-            : "unknown";
-          if (!providerBreakdown[key]) providerBreakdown[key] = zeroTokens();
           const tu = stage.tokenUsage;
           if (tu) {
+            const key = stage.llmProvider && stage.llmModel
+              ? `${stage.llmProvider}/${stage.llmModel}`
+              : "unknown";
+            if (!providerBreakdown[key]) providerBreakdown[key] = zeroTokens();
             providerBreakdown[key].inputTokens += tu.inputTokens ?? 0;
             providerBreakdown[key].outputTokens += tu.outputTokens ?? 0;
             providerBreakdown[key].cachedTokens += tu.cachedTokens ?? 0;
@@ -199,6 +259,16 @@ export async function GET() {
         clipsCount,
         diskUsage: formatBytes(getDiskUsage(jobDir).size),
         tokens,
+        normalizationWarnings: countNormalizationWarnings(jobDir),
+        timing: timing
+          ? {
+              outcome: timing.outcome,
+              totalMs: timing.totalMs,
+              failedStage: timing.failedStage,
+              failureLayer: timing.failureLayer,
+              failureCode: timing.failureCode,
+            }
+          : null,
       });
     }
   }
@@ -206,7 +276,7 @@ export async function GET() {
   const totalDisk = getDiskUsage(mediaRoot);
   const timingHistory = loadPlanTimingHistory();
 
-  return NextResponse.json({
+  const payload = {
     timestamp: new Date().toISOString(),
     server: {
       uptime: process.uptime(),
@@ -231,5 +301,12 @@ export async function GET() {
       entries: timingHistory.entries.length,
       last10: timingHistory.entries.slice(-10),
     },
-  });
+  };
+
+  statusCache = {
+    expiresAt: now + STATUS_CACHE_TTL_MS,
+    payload,
+  };
+
+  return NextResponse.json(payload);
 }
