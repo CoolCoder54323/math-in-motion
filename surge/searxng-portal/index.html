@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Private Search Portal</title>
+    <style>
+      body { font-family: Arial, sans-serif; margin: 0; min-height: 100vh; display: grid; place-items: center; background: #0b1020; color: #f2f5ff; }
+      .card { max-width: 580px; padding: 2rem; border-radius: 12px; background: #141b33; box-shadow: 0 8px 30px rgba(0,0,0,.35); }
+      h1 { margin-top: 0; }
+      a.btn { display: inline-block; margin-top: 1rem; padding: .75rem 1.2rem; border-radius: 8px; background: #5b8cff; color: white; text-decoration: none; font-weight: 600; }
+      .muted { opacity: .8; font-size: .95rem; }
+    </style>
+  </head>
+  <body>
+    <main class="card">
+      <h1>Private Search</h1>
+      <p>This portal points to your private SearXNG instance.</p>
+      <p class="muted">Update <code>SEARCH_URL</code> in <code>surge/searxng-portal/index.html</code> or set a meta refresh before deploying.</p>
+      <a id="search-link" class="btn" href="#">Open search</a>
+    </main>
+    <script>
+      const SEARCH_URL = "https://example-searxng-instance.example";
+      const link = document.getElementById("search-link");
+      link.href = SEARCH_URL;
+    </script>
+  </body>
+</html>
